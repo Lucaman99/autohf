@@ -12,3 +12,10 @@ The main idea behind AutoHF is a mapping from fundamental objects in Hartree-Foc
 object used to perform calculations in Hartree-Fock, the fundamental objects are now maps from a parameter space to the space of atomic oribtals.
 
 AutoHF is built on top of JAX, so we try to follow the general JAX-philosophy as much as possible.
+
+### 3. To-Do
+
+**Optimizations**
+
+1. Using native JAX functionality to implement each of the recursive functions used to compute the integrals, so we can compile once with `jit`.
+2. 

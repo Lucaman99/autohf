@@ -1,17 +1,22 @@
 """
 Defining basis sets, atomic orbitals, and molecular orbitals
 """
-import jax.numpy as jnp
+import autograd.numpy as anp
 import basis_set_exchange as bse
-from .integrals import atomic_norm
+from .integrals import atomic_norm, gaussian_norm
+from .utils import build_param_space
+import autograd
 
 # Functionality for loading default values for basis functions
 
 periodic_table = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4}
-# TODO: Finish this
+# TODO: Add more elements to the periodic table!
 
 
 def get_basis_set_symbol(name, symbol):
+    """
+    Gets the default values for a basis set corresponding to a particular atom
+    """
     e = periodic_table[symbol]
     element = [e]
     basis = bse.get_basis(name, elements=element)['elements']
@@ -45,22 +50,6 @@ def generate_basis_set(name, symbols):
     return tuple(basis_set)
 
 
-def build_param_space(params, args):
-    """
-    Builds the parameter space
-    """
-    new_args = []
-    counter = 0
-
-    for co, c in enumerate(params):
-        if c is None:
-            new_args.append(args[counter])
-            counter += 1
-        else:
-            new_args.append(c)
-
-    return tuple(new_args)
-
 class AtomicBasisFunction:
     """
     A class representing an atomic basis function. In general, a collection of such
@@ -78,18 +67,22 @@ class AtomicBasisFunction:
         """
         Calls the molecular orbital
         """
-        r = args[0]
-        R, C, A = build_param_space(self.params, args[1:])
+        R, C, A = build_param_space(self.params, args)
+
+        N = [gaussian_norm(self.L, a) for a in A]
+        C = [n * c for n, c in zip(N, C)]
 
         l, m, n = self.L
         x0, y0, z0 = R[0], R[1], R[2]
-        x, y, z = r[0], r[1], r[2]
-
-        ang = ((x - x0) ** l) * ((y - y0) ** m) * ((z - z0) ** n)
-        val = ang * jnp.dot(jnp.array(C), jnp.array([jnp.exp(-alpha * ((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2)) for alpha in A]))
         norm = atomic_norm(self.L, A, C)
-        print(norm)
-        return norm * val
+
+        def orbital_fn(r):
+            x, y, z = r[0], r[1], r[2]
+
+            ang = ((x - x0) ** l) * ((y - y0) ** m) * ((z - z0) ** n)
+            val = ang * anp.dot(anp.array(C), anp.array([anp.exp(-alpha * ((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2)) for alpha in A]))
+            return norm * val
+        return orbital_fn
 
 
 def get_tuples(length, total):
@@ -104,19 +97,9 @@ def get_tuples(length, total):
         for t in get_tuples(length - 1, total - i):
             yield (i,) + t
 
+
 def generate_L(L):
     """
     Generates L-tuples
     """
     return get_tuples(3, L)
-
-
-class MolecularOrbital:
-    """
-    A class representing a molecular orbital. Really just a bundle of AtomicBasisFunction classes
-    """
-
-    def __init__(self, ao):
-        self.coeffs = coeffs
-        self.ao = ao
-
