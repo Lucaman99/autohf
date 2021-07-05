@@ -18,4 +18,8 @@ AutoHF is built on top of JAX, so we try to follow the general JAX-philosophy as
 **Optimizations**
 
 1. Using native JAX functionality to implement each of the recursive functions used to compute the integrals, so we can compile once with `jit`.
-2. 
+
+
+### Known Issues
+
+- The method that computes electron-nucleus interactions assumes that the number of provided coordinate vectors is equal to the number of provided atomic basis functions. This is obviously not the case (it only really holds for hydrogen-based molecules).
