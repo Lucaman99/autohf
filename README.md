@@ -11,7 +11,7 @@ Schrodinger equation by taking linear combinations of atomic orbitals (LCAO).
 The main idea behind AutoHF is a mapping from fundamental objects in Hartree-Fock, to maps from a parameter space to such objects. For example, instead of treating atomic oribtals as the fundamental
 object used to perform calculations in Hartree-Fock, the fundamental objects are now maps from a parameter space to the space of atomic oribtals.
 
-AutoHF is built on top of JAX, so we try to follow the general JAX-philosophy as much as possible.
+AutoHF is built on top of Autograd, so we try to follow the general Autograd-philosophy as much as possible.
 
 ### 3. To-Do
 
@@ -22,4 +22,4 @@ AutoHF is built on top of JAX, so we try to follow the general JAX-philosophy as
 
 ### Known Issues
 
-- The method that computes electron-nucleus interactions assumes that the number of provided coordinate vectors is equal to the number of provided atomic basis functions. This is obviously not the case (it only really holds for hydrogen-based molecules).
+TBD
