@@ -84,6 +84,25 @@ class AtomicBasisFunction:
         return orbital_fn
 
 
+class MolecularOrbital:
+    """
+    A class representing a linear combination of the atomic basis functions.
+    """
+
+    def __init__(self, coeffs, orbitals):
+        self.coeffs = coeffs
+        self.orbitals = orbitals
+
+    def __call__(self, *args):
+
+        def molecular_fn(r):
+            s = 0
+            for i, orb in enumerate(self.orbitals):
+                s = s + self.coeffs[i] * orb(*(args[i]))(r)
+            return s
+        return molecular_fn
+
+
 def get_tuples(length, total):
     """
     Generates all angular momentum tuples corresponding to a value of L

@@ -3,7 +3,6 @@ Post-processing of Hartree-Fock results and generation of Hamiltonians
 """
 import autograd.numpy as anp
 from .hartreefock import *
-import copy
 
 
 def one_electron_integral(num_elec, atomic_orbitals, idx):
