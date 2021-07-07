@@ -1,10 +1,18 @@
-# autohf
-Automatic differentiation and Hartree-Fock
+# AutoHF
+**Automatic differentiation and Hartree-Fock**
 
-### 1. Background
+[pic](assets/header.png)
 
 Hartree-Fock is a method in computation quantum chemistry that treats the electrons in a molecule as a mean-field, and is able to find approximate solutions to the 
-Schrodinger equation by taking linear combinations of atomic orbitals (LCAO).
+Schrodinger equation by taking linear combinations of atomic orbitals (LCAO). This package attempts to treat the HF method in a fully differentiable manner, such that all quantities calculated during Hartree-Fock can be differentiated.
+
+## Installation
+
+To install AutoHF, clone the repository and run:
+
+```
+python setup.py build_ext --inplace install --user
+```
 
 ### 2. Code Philosophy
 
@@ -13,12 +21,11 @@ object used to perform calculations in Hartree-Fock, the fundamental objects are
 
 AutoHF is built on top of Autograd, so we try to follow the general Autograd-philosophy as much as possible.
 
-### 3. To-Do
+## To-Do
 
 **Optimizations**
 
 1. Using native JAX functionality to implement each of the recursive functions used to compute the integrals, so we can compile once with `jit`.
-
 
 ### Known Issues
 
