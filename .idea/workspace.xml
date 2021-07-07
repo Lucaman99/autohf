@@ -1,14 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="2a6887da-05d5-4ba0-a90c-9cb41a033770" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/Untitled.ipynb" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/autohf/hamiltonian.py" beforeDir="false" afterPath="$PROJECT_DIR$/autohf/hamiltonian.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/autohf/hartreefock.py" beforeDir="false" afterPath="$PROJECT_DIR$/autohf/hartreefock.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/autohf/integrals.py" beforeDir="false" afterPath="$PROJECT_DIR$/autohf/integrals.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/autohf/legacy.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/autohf/orbitals.py" beforeDir="false" afterPath="$PROJECT_DIR$/autohf/orbitals.py" afterDir="false" />
-    </list>
+    <list default="true" id="2a6887da-05d5-4ba0-a90c-9cb41a033770" name="Default Changelist" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -163,6 +156,7 @@
   </component>
   <component name="PropertiesComponent">
     <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
   </component>
   <component name="RunDashboard">
