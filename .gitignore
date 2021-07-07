@@ -1,0 +1,12 @@
+*~
+*.pyc
+doc/_build
+build
+dist
+qit.egg-info
+.idea
+*.ipynp
+*.ipynb_checkpoints
+*.egg-info*
+*.DS_Store
+config.toml
