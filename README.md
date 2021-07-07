@@ -1,10 +1,11 @@
 # AutoHF
 <p align="center">
   <br><br>
-  <b>Automatic differentiation and Hartree-Fock</b>
   <br><br>
   <img src="./examples/assets/header.png" />
 </p>
+
+## Automatic Differentiation and Hartree Fock
 
 Hartree-Fock is a method in computation quantum chemistry that treats the electrons in a molecule as a mean-field, and is able to find approximate solutions to the 
 Schrodinger equation by taking linear combinations of atomic orbitals (LCAO). This package attempts to treat the HF method in a fully differentiable manner, such that all quantities calculated during Hartree-Fock can be differentiated.
