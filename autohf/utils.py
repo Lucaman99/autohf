@@ -1,7 +1,8 @@
 """
 Utility functions
 """
-import autograd.numpy as anp
+import jax.numpy as jnp
+
 
 def build_param_space(params, args):
     """
@@ -21,4 +22,4 @@ def build_param_space(params, args):
 
 def build_arr(dims, index):
     """Builds a matrix"""
-    return anp.bincount([anp.ravel_multi_index(index, dims)], None, anp.prod(dims)).reshape(dims)
+    return jnp.bincount(jnp.array([jnp.ravel_multi_index(index, dims)]), None, jnp.prod(jnp.array(dims))).reshape(dims)

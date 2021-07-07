@@ -1,7 +1,7 @@
 """
 Defining basis sets, atomic orbitals, and molecular orbitals
 """
-import autograd.numpy as anp
+import jax.numpy as jnp
 import basis_set_exchange as bse
 from .integrals import atomic_norm, gaussian_norm
 from .utils import build_param_space
@@ -79,28 +79,9 @@ class AtomicBasisFunction:
             x, y, z = r[0], r[1], r[2]
 
             ang = ((x - x0) ** l) * ((y - y0) ** m) * ((z - z0) ** n)
-            val = ang * anp.dot(anp.array(C), anp.array([anp.exp(-alpha * ((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2)) for alpha in A]))
+            val = ang * jnp.dot(jnp.array(C), jnp.array([jnp.exp(-alpha * ((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2)) for alpha in A]))
             return norm * val
         return orbital_fn
-
-
-class MolecularOrbital:
-    """
-    A class representing a linear combination of the atomic basis functions.
-    """
-
-    def __init__(self, coeffs, orbitals):
-        self.coeffs = coeffs
-        self.orbitals = orbitals
-
-    def __call__(self, *args):
-
-        def molecular_fn(r):
-            s = 0
-            for i, orb in enumerate(self.orbitals):
-                s = s + self.coeffs[i] * orb(*(args[i]))(r)
-            return s
-        return molecular_fn
 
 
 def get_tuples(length, total):
