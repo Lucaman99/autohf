@@ -1,7 +1,5 @@
 # AutoHF
 <p align="center">
-  <br><br>
-  <br><br>
   <img src="./examples/assets/header.png" />
 </p>
 
