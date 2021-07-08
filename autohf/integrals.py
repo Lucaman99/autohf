@@ -3,7 +3,7 @@ Computing integrals relating to Hartree-Fock calculations
 """
 import jax.numpy as jnp
 import jax.scipy as sc
-from .utils import build_param_space
+from .utils import build_param_space, cartesian_prod
 import jax
 import numpy as np
 from jax.experimental import loops
@@ -39,18 +39,15 @@ def atomic_norm(L, alpha, a):
     coeff = ((jnp.pi ** (3/2)) / (2 ** L_sum))
     coeff = coeff * double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1)
 
-    s = 0
-    for i in range(len(alpha)):
-        for j in range(len(alpha)):
-            s = s + (a[i] * a[j]) / ((alpha[i] + alpha[j]) ** (L_sum + (3/2)))
+    with loops.Scope() as s:
+        s.a = a
+        s.alpha = alpha
+        s.data = 0.0
 
-    #arr = jnp.indices((len(alpha), len(alpha)))
-
-    #body_fn_inner = lambda j: (lambda i, val: val + (a[i] * a[j]) / ((alpha[i] + alpha[j]) ** (L_sum + (3 / 2))))
-    #body_fn_outer = lambda j, val: val + jax.lax.fori_loop(0, len(alpha), body_fn_inner(j), 0)
-    #return 1 / jnp.sqrt(coeff * jax.lax.fori_loop(0, len(alpha), body_fn_outer, 0))
-
-    return 1 / jnp.sqrt(coeff * s)
+        for i in s.range(s.a.shape[0]):
+            for j in s.range(s.a.shape[0]):
+                s.data += (s.a[i] * s.a[j]) / ((s.alpha[i] + s.alpha[j]) ** (L_sum + (3 / 2)))
+        return 1 / jnp.sqrt(coeff * s.data)
 
 
 def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
@@ -62,19 +59,26 @@ def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
     p = alpha + beta
     q = (alpha * beta) / p
 
-    if (t < 0) or (t > (i + j)):
-        v = 0.0
-    elif i == j == t == 0:
-        v = jnp.exp(-1 * q * (Qx ** 2))
-    elif j == 0:
-        v = (1 / (2 * p)) * expansion_coeff(i - 1, j, t - 1, Ra, Rb, alpha, beta) - \
-            (q * Qx / alpha) * expansion_coeff(i - 1, j, t, Ra, Rb, alpha, beta) + \
-            (t + 1) * expansion_coeff(i - 1, j, t + 1, Ra, Rb, alpha, beta)
-    else:
-        v = (1 / (2 * p)) * expansion_coeff(i, j - 1, t - 1, Ra, Rb, alpha, beta) + \
-            (q * Qx / beta) * expansion_coeff(i, j - 1, t, Ra, Rb, alpha, beta) + \
-            (t + 1) * expansion_coeff(i, j - 1, t + 1, Ra, Rb, alpha, beta)
-    return v
+    return jax.lax.cond(
+        jax.lax.bitwise_or((t < 0), (t > (i + j))),
+        lambda _: 0.0,
+        lambda _: jax.lax.cond(
+            jax.lax.bitwise_and(jax.lax.bitwise_and(i == 0, j == 0), t == 0),
+            lambda _: jnp.exp(-1 * q * (Qx ** 2)),
+            lambda _: jax.lax.cond(
+                j == 0,
+                lambda _: (1 / (2 * p)) * expansion_coeff(i - 1, j, t - 1, Ra, Rb, alpha, beta) - \
+                (q * Qx / alpha) * expansion_coeff(i - 1, j, t, Ra, Rb, alpha, beta) + \
+                (t + 1) * expansion_coeff(i - 1, j, t + 1, Ra, Rb, alpha, beta),
+                lambda _ : (1 / (2 * p)) * expansion_coeff(i, j - 1, t - 1, Ra, Rb, alpha, beta) + \
+                (q * Qx / beta) * expansion_coeff(i, j - 1, t, Ra, Rb, alpha, beta) + \
+                (t + 1) * expansion_coeff(i, j - 1, t + 1, Ra, Rb, alpha, beta),
+                operand=None
+            ),
+            operand=None
+        ),
+        operand=None
+    )
 
 
 def gaussian_overlap(alpha, L1, Ra, beta, L2, Rb):
@@ -272,24 +276,24 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
     P = gaussian_prod(alpha, Ra, beta, Rb) # A and B composite center
     Q = gaussian_prod(gamma, Rc, delta, Rd) # C and D composite center
 
-    val = 0.0
-    for t in range(l1+l2+1):
-        for u in range(m1+m2+1):
-            for v in range(n1+n2+1):
-                for tau in range(l3+l4+1):
-                    for nu in range(m3+m4+1):
-                        for phi in range(n3+n4+1):
-                            val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
-                                   expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
-                                   expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
-                                   expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) * \
-                                   expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) * \
-                                   expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) * \
-                                   ((-1) ** tau + nu + phi) * \
-                                   R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
+    with loops.Scope() as s:
+        s.val = 0.0
+        for t in s.range(l1+l2+1):
+            for u in s.range(m1+m2+1):
+                for v in s.range(n1+n2+1):
+                    for tau in s.range(l3+l4+1):
+                        for nu in s.range(m3+m4+1):
+                            for phi in s.range(n3+n4+1):
+                                s.val += expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
+                                       expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
+                                       expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
+                                       expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) * \
+                                       expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) * \
+                                       expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) * \
+                                       ((-1) ** tau + nu + phi) * \
+                                       R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
 
-    val = val * 2 * (jnp.pi ** 2.5) / (p * q * jnp.sqrt(p+q))
-    return val
+        return s.val * 2 * (jnp.pi ** 2.5) / (p * q * jnp.sqrt(p+q))
 
 
 def generate_two_electron(a, b, c, d):
