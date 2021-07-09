@@ -28,7 +28,7 @@ def build_arr(dims, index):
 def cartesian_prod(*args):
     """Cartesian product of arrays"""
     if len(args) == 1:
-        return args[0]
+        return anp.array(args[0])
     return cartesian_prod(
         anp.transpose([anp.tile(args[0], len(args[1])), anp.repeat(args[1], len(args[0]))]),
         *args[2:]

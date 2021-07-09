@@ -172,5 +172,5 @@ def hartree_fock(num_elec, atomic_orbitals, tol=1e-8):
             P = P_new
 
             counter += 1
-        return v_fock, w_fock, H_core, eri_tensor
+        return v_fock, w_fock, F, H_core, eri_tensor
     return HF
