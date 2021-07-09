@@ -39,7 +39,7 @@ def get_basis_set_symbol(name, symbol):
     return vals
 
 
-def generate_basis_set(name, symbols):
+def basis_set_params(name, symbols):
     """
     Generates default basis set parameters
     """
@@ -82,6 +82,20 @@ class AtomicBasisFunction:
             val = ang * anp.dot(anp.array(C), anp.array([anp.exp(-alpha * ((x - x0) ** 2 + (y - y0) ** 2 + (z - z0) ** 2)) for alpha in A]))
             return norm * val
         return orbital_fn
+
+
+def generate_basis_set(name, symbols, R=None, C=False, A=False):
+    """Generates a basis set"""
+    basis_set = []
+    params = basis_set_params(name, symbols)
+    for i, p in enumerate(params):
+        geometry = None if R is None else R[i]
+        for func in p:
+            L, exp, coeff = func
+            exp = None if A is False else exp
+            coeff = None if C is False else coeff
+            basis_set.append(AtomicBasisFunction(L, R=geometry, C=coeff, A=exp))
+    return basis_set
 
 
 class MolecularOrbital:
