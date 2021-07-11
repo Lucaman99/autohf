@@ -241,7 +241,7 @@ def generate_nuclear_attraction(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2, C)).sum()
+        return N1 * N2 * ((C1[:,anp.newaxis] * C2[:,anp.newaxis,anp.newaxis]) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2[:,anp.newaxis,anp.newaxis], b.L, R2, C)).sum()
     return V
 
 
