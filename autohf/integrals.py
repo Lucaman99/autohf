@@ -184,7 +184,7 @@ def gaussian_prod(alpha, Ra, beta, Rb):
 def R(t, u, v, n, p, DR):
     """Generates Hermite-Coulomb overlaps for nuclear attraction integral"""
 
-    x, y, z = DR[0], DR[1], DR[2]
+    x, y, z = DR[:,:,0], DR[:,:,1], DR[:,:,2]
 
     T = p * (anp.linalg.norm(DR) ** 2)
     val = 0
@@ -225,7 +225,8 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
                             expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
                             R(t, u, v, 0, p, DR)
     val = val * 2 * anp.pi / p
-    return val
+    print(val[:,:,0].shape)
+    return val[:,:,0]
 
 
 def generate_nuclear_attraction(a, b):
@@ -241,7 +242,7 @@ def generate_nuclear_attraction(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        return N1 * N2 * ((C1[:,anp.newaxis] * C2[:,anp.newaxis,anp.newaxis]) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2[:,anp.newaxis,anp.newaxis], b.L, R2, C)).sum()
+        return N1 * N2 * ((C1 * C2[:,anp.newaxis]) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2[:,anp.newaxis,anp.newaxis], b.L, R2, C)).sum()
     return V
 
 
