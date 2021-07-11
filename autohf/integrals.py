@@ -36,36 +36,53 @@ def atomic_norm(L, alpha, a):
     coeff = ((anp.pi ** (3/2)) / (2 ** L_sum))
     coeff = coeff * double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1)
 
-    s = 0
-    for i in range(len(alpha)):
-        for j in range(len(alpha)):
-            s = s + (a[i] * a[j]) / ((alpha[i] + alpha[j]) ** (L_sum + (3/2)))
-
+    s = ((a[:,anp.newaxis] * a) / ((alpha[:,anp.newaxis] + alpha) ** (L_sum + (3/2)))).sum()
     return 1 / anp.sqrt(coeff * s)
 
 
 def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
-    """
-    Computes expansion coefficients for calculation of overlap integrals
-    """
-
     Qx = Ra - Rb
     p = alpha + beta
     q = (alpha * beta) / p
+    c1, c2, c4 = (1 / (2 * p)), (q * Qx / alpha), (q * Qx / beta)
 
-    if (t < 0) or (t > (i + j)):
-        v = 0.0
-    elif i == j == t == 0:
-        v = anp.exp(-1 * q * (Qx ** 2))
-    elif j == 0:
-        v = (1 / (2 * p)) * expansion_coeff(i - 1, j, t - 1, Ra, Rb, alpha, beta) - \
-            (q * Qx / alpha) * expansion_coeff(i - 1, j, t, Ra, Rb, alpha, beta) + \
-            (t + 1) * expansion_coeff(i - 1, j, t + 1, Ra, Rb, alpha, beta)
-    else:
-        v = (1 / (2 * p)) * expansion_coeff(i, j - 1, t - 1, Ra, Rb, alpha, beta) + \
-            (q * Qx / beta) * expansion_coeff(i, j - 1, t, Ra, Rb, alpha, beta) + \
-            (t + 1) * expansion_coeff(i, j - 1, t + 1, Ra, Rb, alpha, beta)
-    return v
+    pairs = [(i, j, t)]
+    coeffs = [1.0]
+    cs = 0.0
+
+    while len(pairs) > 0:
+        new_pairs = []
+        new_coeffs = []
+        for c, p in zip(coeffs, pairs):
+            i, j, t = p
+            c3 = t + 1
+            if i == j == t == 0:
+                cs = cs + c * anp.exp(-1 * q * (Qx ** 2))
+            else:
+                v1, v2, v3 = t - 1 >= 0, t <= (i + j - 1), t <= (i + j - 2)
+                if j == 0:
+                    if v1:
+                        new_pairs.append((i - 1, j, t - 1))
+                        new_coeffs.append(c * c1)
+                    if v2:
+                        new_pairs.append((i - 1, j, t))
+                        new_coeffs.append(c * -c2)
+                    if v3:
+                        new_pairs.append((i - 1, j, t + 1))
+                        new_coeffs.append(c * c3)
+                else:
+                    if v1:
+                        new_pairs.append((i, j - 1, t - 1))
+                        new_coeffs.append(c * c1)
+                    if v2:
+                        new_pairs.append((i, j - 1, t))
+                        new_coeffs.append(c * c4)
+                    if v3:
+                        new_pairs.append((i, j - 1, t + 1))
+                        new_coeffs.append(c * c3)
+        coeffs = new_coeffs
+        pairs = new_pairs
+    return cs
 
 
 def gaussian_overlap(alpha, L1, Ra, beta, L2, Rb):
@@ -73,10 +90,10 @@ def gaussian_overlap(alpha, L1, Ra, beta, L2, Rb):
     Computes the overlap integral between two Gaussian functions
     """
     p = alpha + beta
-    integral = 1
-    for j in range(3):
-        integral = integral * anp.sqrt(anp.pi / p) * expansion_coeff(L1[j], L2[j], 0, Ra[j], Rb[j], alpha, beta)
-    return integral
+    s = 1.0
+    for i in range(3):
+        s = s * anp.sqrt(anp.pi / p) * expansion_coeff(L1[i], L2[i], 0, Ra[i], Rb[i], alpha, beta)
+    return s
 
 
 def generate_overlap(a, b):
@@ -91,15 +108,11 @@ def generate_overlap(a, b):
         R1, C1, A1 = build_param_space(a.params, args_1)
         R2, C2, A2 = build_param_space(b.params, args_2)
 
-        C1 = [i * gaussian_norm(a.L, j) for i, j in zip(C1, A1)]
-        C2 = [i * gaussian_norm(b.L, j) for i, j in zip(C2, A2)]
+        C1 = C1 * gaussian_norm(a.L, A1)
+        C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        integral = 0
-        for i, c1 in enumerate(C1):
-            for j, c2 in enumerate(C2):
-                integral = integral + N1 * N2 * c1 * c2 * gaussian_overlap(A1[i], a.L, R1, A2[j], b.L, R2)
-        return integral
+        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * gaussian_overlap(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
     return S
 
 
@@ -131,15 +144,11 @@ def generate_kinetic(a, b):
         R1, C1, A1 = build_param_space(a.params, args_1)
         R2, C2, A2 = build_param_space(b.params, args_2)
 
-        C1 = [i * gaussian_norm(a.L, j) for i, j in zip(C1, A1)]
-        C2 = [i * gaussian_norm(b.L, j) for i, j in zip(C2, A2)]
+        C1 = C1 * gaussian_norm(a.L, A1)
+        C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        integral = 0
-        for i, c1 in enumerate(C1):
-            for j, c2 in enumerate(C2):
-                integral = integral + N1 * N2 * c1 * c2 * gaussian_kinetic(A1[i], a.L, R1, A2[j], b.L, R2)
-        return integral
+        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * gaussian_kinetic(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
     return T
 
 
@@ -161,12 +170,10 @@ def rising_factorial(n, lim):
 
 def boys_fn(n, t):
     """Returns the Boys function"""
-    if t == 0:
-        return 1 / (2 * n + 1)
-    if n == 0:
-        return anp.sqrt(anp.pi / (4 * t)) * sc.special.erf(anp.sqrt(t))
-    else:
-        return sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / ((2 * t) ** (0.5 + n))
+    val = anp.where(t == 0, 1 / (2 * n + 1), 0) + \
+           anp.where(anp.logical_and(n == 0, t != 0), anp.sqrt(anp.pi / (4 * t)) * sc.special.erf(anp.sqrt(t)), 0) + \
+           anp.where(anp.logical_and(n != 0, t != 0), sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / ((2 * t) ** (0.5 + n)), 0)
+    return val
 
 
 def gaussian_prod(alpha, Ra, beta, Rb):
@@ -230,16 +237,11 @@ def generate_nuclear_attraction(a, b):
         R1, C1, A1 = build_param_space(a.params, args_1)
         R2, C2, A2 = build_param_space(b.params, args_2)
 
-        C1 = [i * gaussian_norm(a.L, j) for i, j in zip(C1, A1)]
-        C2 = [i * gaussian_norm(b.L, j) for i, j in zip(C2, A2)]
+        C1 = C1 * gaussian_norm(a.L, A1)
+        C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        integral = 0
-        for i, c1 in enumerate(C1):
-            for j, c2 in enumerate(C2):
-                integral = integral + N1 * N2 * c1 * c2 * nuclear_attraction(A1[i], a.L, R1, A2[j], b.L, R2, C)
-        return integral
-
+        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2, C)).sum()
     return V
 
 
@@ -289,18 +291,35 @@ def generate_two_electron(a, b, c, d):
         R3, C3, A3 = build_param_space(c.params, args_3)
         R4, C4, A4 = build_param_space(d.params, args_4)
 
-        C1 = [i * gaussian_norm(a.L, j) for i, j in zip(C1, A1)]
-        C2 = [i * gaussian_norm(b.L, j) for i, j in zip(C2, A2)]
-        C3 = [i * gaussian_norm(c.L, j) for i, j in zip(C3, A3)]
-        C4 = [i * gaussian_norm(d.L, j) for i, j in zip(C4, A4)]
+        C1 = C1 * gaussian_norm(a.L, A1)
+        C2 = C2 * gaussian_norm(b.L, A2)
+        C3 = C3 * gaussian_norm(c.L, A1)
+        C4 = C4 * gaussian_norm(d.L, A2)
 
         N1, N2, N3, N4 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2), atomic_norm(a.L, A3, C3), atomic_norm(b.L, A4, C4)
 
-        integral = 0
-        for h, c1 in enumerate(C1):
-            for i, c2 in enumerate(C2):
-                for j, c3 in enumerate(C3):
-                    for k, c4 in enumerate(C4):
-                        integral = integral + N1 * N2 * N3 * N4 * c1 * c2 * c3 * c4 * electron_repulsion(A1[h], a.L, R1, A2[i], b.L, R2, A3[j], c.L, R3, A4[k], d.L, R4)
-        return integral
+        return N1 * N2 * N3 * N4 * (
+                (C1 * C2[:,anp.newaxis] * C3[:,anp.newaxis,anp.newaxis] * C4[:,anp.newaxis,anp.newaxis,anp.newaxis]) *
+                electron_repulsion(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, A3[:,anp.newaxis,anp.newaxis], c.L, R3, A4[:,anp.newaxis,anp.newaxis,anp.newaxis], d.L, R4)
+        ).sum()
     return EE
+
+
+def generate_one_electron(a, b):
+    """
+    Computes all one electron integrals
+    """
+    def I(C, *args):
+        args_1, args_2 = args[0], args[1]
+        R1, C1, A1 = build_param_space(a.params, args_1)
+        R2, C2, A2 = build_param_space(b.params, args_2)
+
+        coeffs = (C1 * gaussian_norm(a.L, A1))[:,anp.newaxis] * (C2 * gaussian_norm(b.L, A2))
+        N = atomic_norm(a.L, A1, C1) * atomic_norm(b.L, A2, C2)
+
+        overlap = N * (coeffs * gaussian_overlap(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
+        kinetic = N * (coeffs * gaussian_kinetic(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
+        nuc_repulsion = N * (coeffs * nuclear_attraction(A1[:, anp.newaxis], a.L, R1, A2, b.L, R2, C)).sum()
+
+        return [overlap, kinetic, nuc_repulsion]
+    return I
