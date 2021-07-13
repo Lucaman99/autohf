@@ -82,7 +82,6 @@ def electron_nucleus_matrix(atomic_orbitals):
         for count, atom in enumerate(atomic_orbitals):
             R, Coeff, A = build_param_space(atom.params, args[count])
             C.append(R)
-
         N = anp.zeros((len(atomic_orbitals), len(atomic_orbitals)))
         for i, a in enumerate(atomic_orbitals):
             for j, b in enumerate(atomic_orbitals):

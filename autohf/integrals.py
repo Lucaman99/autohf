@@ -4,6 +4,8 @@ Computing integrals relating to Hartree-Fock calculations
 import autograd.numpy as anp
 import autograd.scipy as sc
 from .utils import build_param_space
+import numpy as np
+from autograd.extend import primitive, defvjp
 
 
 def double_factorial(n):
@@ -167,13 +169,28 @@ def rising_factorial(n, lim):
         prod *= n + k
     return prod
 
-
+@primitive
 def boys_fn(n, t):
-    """Returns the Boys function"""
-    val = anp.where(t == 0, 1 / (2 * n + 1), 0) + \
-           anp.where(anp.logical_and(n == 0, t != 0), anp.sqrt(anp.pi / (4 * t)) * sc.special.erf(anp.sqrt(t)), 0) + \
-           anp.where(anp.logical_and(n != 0, t != 0), sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / ((2 * t) ** (0.5 + n)), 0)
+    val = anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 1), lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
     return val
+
+
+@primitive
+def boys_fn_grad(n, t):
+    val = anp.piecewise(t, [t == 0, t != 0], [lambda t : -1 / (2 * n + 3), lambda t : -1 * boys_fn(n + 1, t)])
+    return val
+
+
+defvjp(boys_fn_grad,
+       None,
+       lambda ans, n, t: lambda g: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
+    )
+
+
+defvjp(boys_fn,
+       None,
+       lambda ans, n, t: lambda g: g * boys_fn_grad(n, t)
+    )
 
 
 def gaussian_prod(alpha, Ra, beta, Rb):
@@ -184,9 +201,9 @@ def gaussian_prod(alpha, Ra, beta, Rb):
 def R(t, u, v, n, p, DR):
     """Generates Hermite-Coulomb overlaps for nuclear attraction integral"""
 
-    x, y, z = DR[:,:,0], DR[:,:,1], DR[:,:,2]
+    x, y, z = DR[0], DR[1], DR[2]
 
-    T = p * (anp.linalg.norm(DR) ** 2)
+    T = p * (DR ** 2).sum(axis=0)
     val = 0
     if t == u == v == 0:
         val = val + ((-2 * p) ** n) * boys_fn(n, T)
@@ -213,8 +230,8 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     l1, m1, n1 = L1
     l2, m2, n2 = L2
     p = alpha + beta
-    P = gaussian_prod(alpha, Ra, beta, Rb)
-    DR = P - anp.array(C)
+    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
+    DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
 
     val = 0.0
     for t in range(l1 + l2 + 1):
@@ -225,8 +242,7 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
                             expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
                             R(t, u, v, 0, p, DR)
     val = val * 2 * anp.pi / p
-    print(val[:,:,0].shape)
-    return val[:,:,0]
+    return val
 
 
 def generate_nuclear_attraction(a, b):
@@ -242,7 +258,8 @@ def generate_nuclear_attraction(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        return N1 * N2 * ((C1 * C2[:,anp.newaxis]) * nuclear_attraction(A1[:,anp.newaxis], a.L, R1, A2[:,anp.newaxis,anp.newaxis], b.L, R2, C)).sum()
+        val = N1 * N2 * ((C1 * C2[:,anp.newaxis]) * nuclear_attraction(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, C)).sum()
+        return val
     return V
 
 
@@ -257,8 +274,8 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
     q = gamma + delta
     quotient = (p * q)/(p + q)
 
-    P = gaussian_prod(alpha, Ra, beta, Rb) # A and B composite center
-    Q = gaussian_prod(gamma, Rc, delta, Rd) # C and D composite center
+    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
+    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta, Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
 
     val = 0.0
     for t in range(l1+l2+1):
@@ -299,28 +316,9 @@ def generate_two_electron(a, b, c, d):
 
         N1, N2, N3, N4 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2), atomic_norm(a.L, A3, C3), atomic_norm(b.L, A4, C4)
 
-        return N1 * N2 * N3 * N4 * (
+        val = N1 * N2 * N3 * N4 * (
                 (C1 * C2[:,anp.newaxis] * C3[:,anp.newaxis,anp.newaxis] * C4[:,anp.newaxis,anp.newaxis,anp.newaxis]) *
                 electron_repulsion(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, A3[:,anp.newaxis,anp.newaxis], c.L, R3, A4[:,anp.newaxis,anp.newaxis,anp.newaxis], d.L, R4)
         ).sum()
+        return val
     return EE
-
-
-def generate_one_electron(a, b):
-    """
-    Computes all one electron integrals
-    """
-    def I(C, *args):
-        args_1, args_2 = args[0], args[1]
-        R1, C1, A1 = build_param_space(a.params, args_1)
-        R2, C2, A2 = build_param_space(b.params, args_2)
-
-        coeffs = (C1 * gaussian_norm(a.L, A1))[:,anp.newaxis] * (C2 * gaussian_norm(b.L, A2))
-        N = atomic_norm(a.L, A1, C1) * atomic_norm(b.L, A2, C2)
-
-        overlap = N * (coeffs * gaussian_overlap(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
-        kinetic = N * (coeffs * gaussian_kinetic(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
-        nuc_repulsion = N * (coeffs * nuclear_attraction(A1[:, anp.newaxis], a.L, R1, A2, b.L, R2, C)).sum()
-
-        return [overlap, kinetic, nuc_repulsion]
-    return I

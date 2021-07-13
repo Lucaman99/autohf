@@ -30,7 +30,7 @@ def electron_integrals(num_elec, atomic_orbitals):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, atomic_orbitals)(*args)
         one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
-        return anp.array(one, two)
+        return [one, two]
     return I
 
 
