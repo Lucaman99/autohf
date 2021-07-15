@@ -10,7 +10,7 @@ def one_electron_integral(num_elec, charge, atomic_orbitals, idx):
     """Returns the one electron coefficient for building the Hamiltonian"""
     def one_elec(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        t = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
+        t = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)[idx[0]][idx[1]]
         return t
     return one_elec
 

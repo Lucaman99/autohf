@@ -221,68 +221,6 @@ def R(t, u, v, n, p, DR):
         val = val + x * R(t - 1, u, v, n + 1, p, DR)
     return val
 
-"""
-def R(t, u, v, n, p, DR):
-
-    x, y, z = DR[0], DR[1], DR[2]
-    T = p * (DR ** 2).sum(axis=0)
-
-    val = anp.where(
-        anp.logical_and(anp.logical_and(t == u, u == v), v == 0),
-        ((-2 * p) ** n) * boys_fn(n, T),
-        np.where(t == 1, anp.eye(2), anp.zeros((2, 2)))
-    )
-    return val
-    
-np.where(
-            t == u == 0,
-            np.where(v > 1, (v - 1) * R(t, u, v - 2, n + 1, p, DR) + z * R(t, u, v - 1, n + 1, p, DR), z * R(t, u, v - 1, n + 1, p, DR)),
-            np.where(
-                t == 0,
-                np.where(v > 1, (u - 1) * R(t, u - 2, v, n + 1, p, DR) + y * R(t, u - 1, v, n + 1, p, DR), y * R(t, u - 1, v, n + 1, p, DR)),
-                np.where(t > 1, (t - 1) * R(t - 2, u, v, n + 1, p, DR) + x * R(t - 1, u, v, n + 1, p, DR), x * R(t - 1, u, v, n + 1, p, DR))
-            )
-        )
-"""
-
-
-def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
-    """
-    Computes nuclear attraction between Gaussian primitives
-    Note that C is the coordinates of the nuclear centre
-    """
-    l1, m1, n1 = L1
-    l2, m2, n2 = L2
-    p = alpha + beta
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
-    DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
-
-    """
-    val = 0.0
-    for t in range(l1 + l2 + 1):
-        for u in range(m1 + m2 + 1):
-            for v in range(n1 + n2 + 1):
-                val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
-                            expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
-                            expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
-                            R(t, u, v, 0, p, DR)
-    """
-    it1, it2, it3 = anp.arange(l1 + l2 + 1), anp.arange(m1 + m2 + 1), anp.arange(n1 + n2 + 1)
-
-    e1 = anp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in it1])
-    e2 = anp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in it2])
-    e3 = anp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in it3])
-
-    R_tensor = anp.zeros((l1 + l2 + 1, m1 + m2 + 1, n1 + n2 + 1))
-    for t in it1:
-        for u in it2:
-            for v in it3:
-                R_tensor = R_tensor + R(t, u, v, 0, p, DR)[:,anp.newaxis,anp.newaxis,anp.newaxis] * build_arr((l1 + l2 + 1, m1 + m2 + 1, n1 + n2 + 1), (t, u, v))
-
-    #R_tensor = R(it1, it2[:,anp.newaxis], it3[:,anp.newaxis,anp.newaxis], 0, p, DR)
-    val = 2 * anp.pi * (R_tensor * (e1 * e2[:,anp.newaxis] * e3[:,anp.newaxis,anp.newaxis])).sum() / p
-    return val
-
 
 def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     """
