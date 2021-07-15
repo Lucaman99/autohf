@@ -73,22 +73,19 @@ def kinetic_matrix(atomic_orbitals):
     return kinetic
 
 
-def electron_nucleus_matrix(atomic_orbitals):
+def electron_nucleus_matrix(atomic_orbitals, charge):
     """Computes the electron-nucleus interaction matrix"""
-    def nuclear(*args):
+    def nuclear(atom_R, *args):
 
         # Extracts nuclear coordinates FIX THIS!!!!!!
-        C = []
-        for count, atom in enumerate(atomic_orbitals):
-            R, Coeff, A = build_param_space(atom.params, args[count])
-            C.append(R)
+        C = atom_R
         N = anp.zeros((len(atomic_orbitals), len(atomic_orbitals)))
         for i, a in enumerate(atomic_orbitals):
             for j, b in enumerate(atomic_orbitals):
                 if i <= j:
                     nuc_integral = 0
-                    for c in C:
-                        nuc_integral = nuc_integral + generate_nuclear_attraction(a, b)(c, args[i], args[j])
+                    for k, c in enumerate(C):
+                        nuc_integral = nuc_integral + charge[k] * generate_nuclear_attraction(a, b)(c, args[i], args[j])
                     if i == j:
                         N = N + nuc_integral * build_arr(N.shape, (i, j))
                     else:
@@ -97,10 +94,10 @@ def electron_nucleus_matrix(atomic_orbitals):
     return nuclear
 
 
-def core_matrix(atomic_orbitals):
+def core_matrix(charge, atomic_orbitals):
     """Computes the core matrix"""
-    def core(*args):
-        return -1 * electron_nucleus_matrix(atomic_orbitals)(*args) + kinetic_matrix(atomic_orbitals)(*args)
+    def core(atom_R, *args):
+        return -1 * electron_nucleus_matrix(atomic_orbitals, charge)(atom_R, *args) + kinetic_matrix(atomic_orbitals)(*args)
     return core
 
 
@@ -116,24 +113,24 @@ def exchange_matrix(num_elec, coeffs, atomic_orbitals):
     return exchange
 
 
-def fock_matrix(num_elec, coeffs, atomic_orbitals):
+def fock_matrix(num_elec, charge, coeffs, atomic_orbitals):
     """Builds the Fock matrix"""
-    def fock(*args):
-        F = core_matrix(atomic_orbitals)(*args) + exchange_matrix(num_elec, coeffs, atomic_orbitals)(*args)
+    def fock(atom_R, *args):
+        F = core_matrix(charge, atomic_orbitals)(atom_R, *args) + exchange_matrix(num_elec, coeffs, atomic_orbitals)(*args)
         return F
     return fock
 
 
-def hartree_fock(num_elec, atomic_orbitals, tol=1e-8):
+def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
     """Performs the Hartree-Fock procedure
 
     Note that this method does not necessarily build matrices using the methods
     constructed above.
     """
-    def HF(*args):
+    def HF(atom_R, *args):
         self_consistent = False
 
-        H_core = core_matrix(atomic_orbitals)(*args) # Builds the initial Fock matrix
+        H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args) # Builds the initial Fock matrix
         S = overlap_matrix(atomic_orbitals)(*args) # Builds the overlap matrix
         eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args) # Builds the electron repulsion tensor
 
