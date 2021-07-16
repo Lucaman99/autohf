@@ -6,11 +6,11 @@ from .hartreefock import *
 from .utils import cartesian_prod
 
 
-def one_electron_integral(num_elec, charge, atomic_orbitals, idx):
+def one_electron_integral(num_elec, charge, atomic_orbitals):
     """Returns the one electron coefficient for building the Hamiltonian"""
     def one_elec(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        t = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)[idx[0]][idx[1]]
+        t = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         return t
     return one_elec
 
@@ -19,7 +19,7 @@ def two_electron_integral(num_elec, charge, atomic_orbitals, idx):
     """Returns two electron integral"""
     def two_elec(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        t = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)[idx[0]][idx[1]][idx[2]][idx[3]]
+        t = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
         return t
     return two_elec
 

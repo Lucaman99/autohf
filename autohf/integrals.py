@@ -5,7 +5,7 @@ import autograd.numpy as anp
 import autograd.scipy as sc
 from .utils import build_param_space, build_arr
 import numpy as np
-from autograd.extend import primitive, defvjp
+from autograd.extend import primitive, defvjp, defjvp
 
 
 def double_factorial(n):
@@ -169,6 +169,11 @@ def rising_factorial(n, lim):
         prod *= n + k
     return prod
 
+
+def boys_fn(n, t):
+    return n * t
+
+"""
 @primitive
 def boys_fn(n, t):
     val = anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 1), lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
@@ -181,16 +186,17 @@ def boys_fn_grad(n, t):
     return val
 
 
-defvjp(boys_fn_grad,
+defjvp(boys_fn_grad,
        None,
        lambda ans, n, t: lambda g: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
     )
 
 
-defvjp(boys_fn,
+defjvp(boys_fn,
        None,
        lambda ans, n, t: lambda g: g * boys_fn_grad(n, t)
     )
+"""
 
 
 def gaussian_prod(alpha, Ra, beta, Rb):
