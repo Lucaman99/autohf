@@ -170,13 +170,11 @@ def rising_factorial(n, lim):
     return prod
 
 
-def boys_fn(n, t):
-    return n * t
-
-"""
 @primitive
 def boys_fn(n, t):
-    val = anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 1), lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
+    val = anp.piecewise(t, [t == 0, t != 0],
+                        [lambda t : 1 / (2 * n + 1),
+                         lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
     return val
 
 
@@ -186,17 +184,16 @@ def boys_fn_grad(n, t):
     return val
 
 
-defjvp(boys_fn_grad,
+defvjp(boys_fn_grad,
        None,
        lambda ans, n, t: lambda g: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
     )
 
 
-defjvp(boys_fn,
+defvjp(boys_fn,
        None,
        lambda ans, n, t: lambda g: g * boys_fn_grad(n, t)
     )
-"""
 
 
 def gaussian_prod(alpha, Ra, beta, Rb):
@@ -280,8 +277,10 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
     q = gamma + delta
     quotient = (p * q)/(p + q)
 
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
-    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta, Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
+    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta,
+                      Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
+    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta,
+                      Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
 
     val = 0.0
     for t in range(l1+l2+1):
@@ -324,7 +323,8 @@ def generate_two_electron(a, b, c, d):
 
         val = N1 * N2 * N3 * N4 * (
                 (C1 * C2[:,anp.newaxis] * C3[:,anp.newaxis,anp.newaxis] * C4[:,anp.newaxis,anp.newaxis,anp.newaxis]) *
-                electron_repulsion(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, A3[:,anp.newaxis,anp.newaxis], c.L, R3, A4[:,anp.newaxis,anp.newaxis,anp.newaxis], d.L, R4)
+                electron_repulsion(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, A3[:,anp.newaxis,anp.newaxis], c.L, R3,
+                                   A4[:,anp.newaxis,anp.newaxis,anp.newaxis], d.L, R4)
         ).sum()
         return val
     return EE
