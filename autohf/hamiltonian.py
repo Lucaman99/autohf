@@ -64,7 +64,7 @@ def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, ac
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
 
         core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)
-        return anp.concatenate((np.array([core]), one_elec.flatten(), two_elec.flatten()))
+        return anp.concatenate((anp.array([core]), one_elec.flatten(), two_elec.flatten()))
     return I
 
 
