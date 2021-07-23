@@ -8,44 +8,6 @@ import openfermion
 from pennylane import qchem
 
 
-def one_electron_integral(num_elec, charge, atomic_orbitals):
-    """Returns the one electron integral matrix"""
-    def one_elec(atom_R, *args):
-        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        t = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
-        return t
-    return one_elec
-
-
-def two_electron_integral(num_elec, charge, atomic_orbitals):
-    """Returns the two electron integral matrix"""
-    def two_elec(atom_R, *args):
-        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        t = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
-        return t
-    return two_elec
-
-
-def one_electron_integral_flat(num_elec, charge, atomic_orbitals):
-    """One electron integrals flat"""
-    return lambda atom_R, *args : one_electron_integral(num_elec, charge, atomic_orbitals)(atom_R, *args).flatten()
-
-
-def two_electron_integral_flat(num_elec, charge, atomic_orbitals):
-    """Two electron integrals flat"""
-    return lambda atom_R, *args : two_electron_integral(num_elec, charge, atomic_orbitals)(atom_R, *args).flatten()
-
-
-def one_electron_integral_entry(num_elec, charge, atomic_orbitals, idx):
-    """Returns the one electron integrals entry"""
-    return lambda atom_R, *args : one_electron_integral(num_elec, charge, atomic_orbitals)[idx[0]][idx[1]]
-
-
-def two_electron_integral_entry(num_elec, charge, atomic_orbitals, idx):
-    """Returns two electron integrals entry"""
-    return lambda atom_R, *args: two_electron_integral(num_elec, charge, atomic_orbitals)[idx[0]][idx[1]][idx[2]][idx[3]]
-
-
 def electron_integrals(num_elec, charge, atomic_orbitals):
     """Returns the one and two electron integrals"""
     def I(atom_R, *args):
@@ -131,3 +93,10 @@ def get_active_space_integrals(one_body_integrals, two_body_integrals, occupied_
             one_body_integrals_new[anp.ix_(active_indices, active_indices)],
             two_body_integrals[anp.ix_(active_indices, active_indices, active_indices, active_indices)])
 
+
+def hf_energy(num_elec, charge, atomic_orbitals):
+    """Returns the Hartree-Fock energy"""
+    def energy(atom_R, *args):
+        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
+        return anp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock)) + nuclear_energy(charge)(atom_R)
+    return energy
