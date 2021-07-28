@@ -127,12 +127,13 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
     Note that this method does not necessarily build matrices using the methods
     constructed above.
     """
+
     def HF(atom_R, *args):
         self_consistent = False
 
-        H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args) # Builds the initial Fock matrix
-        S = overlap_matrix(atomic_orbitals)(*args) # Builds the overlap matrix
-        eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args) # Builds the electron repulsion tensor
+        H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args)  # Builds the initial Fock matrix
+        S = overlap_matrix(atomic_orbitals)(*args)  # Builds the overlap matrix
+        eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args)  # Builds the electron repulsion tensor
 
         F_initial = H_core
 
@@ -145,13 +146,12 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
         # Constructs F_tilde and finds the initial coefficients
         F_tilde_initial = X.T @ F_initial @ X
         v_fock, w_fock = anp.linalg.eigh(F_tilde_initial)
-        
+
         coeffs = X @ w_fock
         P = density_matrix(num_elec, coeffs)
 
         counter = 0
         while not self_consistent:
-
             JM = anp.einsum('pqrs,rs->pq', eri_tensor, P)
             KM = anp.einsum('psqr,rs->pq', eri_tensor, P)
             E_mat = 2 * JM - KM
