@@ -124,7 +124,7 @@ def fock_matrix(num_elec, charge, coeffs, atomic_orbitals):
 ##################### DELETE ASAP!!!! #####################
 ###########################################################
 
-
+"""
 from functools import partial
 import numpy.linalg as npla
 from autograd.numpy.numpy_wrapper import wrap_namespace
@@ -144,7 +144,6 @@ _diag = lambda a: wrap_anp.eye(a.shape[-1]) * a
 
 
 def grad_eigh(ans, x, UPLO='L'):
-    """Gradient for eigenvalues and vectors of a symmetric matrix."""
     N = x.shape[-1]
     w, v = ans  # Eigenvalues, eigenvectors.
     vc = wrap_anp.conj(v)
@@ -183,6 +182,7 @@ def grad_eigh(ans, x, UPLO='L'):
 
 
 defvjp(eigh, grad_eigh)
+"""
 
 
 ###########################################################
@@ -205,14 +205,14 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
         F_initial = H_core
 
         # Builds the X matrix
-        v, w = eigh(S)
+        v, w = anp.linalg.eigh(S)
         v = anp.array([1 / anp.sqrt(r) for r in v])
         diag_mat, w_inv = anp.diag(v), w.T
         X = w @ diag_mat @ w_inv
 
         # Constructs F_tilde and finds the initial coefficients
         F_tilde_initial = X.T @ F_initial @ X
-        v_fock, w_fock = eigh(F_tilde_initial)
+        v_fock, w_fock = anp.linalg.eigh(F_tilde_initial)
 
         coeffs = X @ w_fock
         P = density_matrix(num_elec, coeffs)
@@ -225,10 +225,10 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
             E_mat = 2 * JM - KM
 
             F = H_core + E_mat
-            F_tilde = X.T @ F @ X
+            F_tilde = anp.dot(X.T, anp.dot(F, X))
 
             # Solve for eigenvalues and eigenvectors
-            v_fock, w_fock = eigh(F_tilde)
+            v_fock, w_fock = anp.linalg.eigh(F_tilde)
             w_fock = X @ w_fock
             P_new = density_matrix(num_elec, w_fock)
 

@@ -225,6 +225,28 @@ def R(t, u, v, n, p, DR):
     return val
 
 
+"""
+def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
+    l1, m1, n1 = L1
+    l2, m2, n2 = L2
+    p = alpha + beta
+    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
+    DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
+
+    e1 = anp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1 + l2 + 1)])
+    e2 = anp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1 + m2 + 1)])
+    e3 = anp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1 + n2 + 1)])
+
+    val = 0.0
+    for t in range(l1 + l2 + 1):
+        for u in range(m1 + m2 + 1):
+            for v in range(n1 + n2 + 1):
+                val = val + e1[t] * e2[u] * e3[v] * R(t, u, v, 0, p, DR)
+    val = val * 2 * anp.pi / p
+    return val
+"""
+
+
 def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     """
     Computes nuclear attraction between Gaussian primitives
@@ -236,15 +258,14 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
     DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
 
-    e1 = [expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1 + l2 + 1)]
-    e2 = [expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1 + m2 + 1)]
-    e3 = [expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1 + n2 + 1)]
-
     val = 0.0
     for t in range(l1 + l2 + 1):
         for u in range(m1 + m2 + 1):
             for v in range(n1 + n2 + 1):
-                val = val + e1[t] * e2[u] * e3[v] * R(t, u, v, 0, p, DR)
+                val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
+                            expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
+                            expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
+                            R(t, u, v, 0, p, DR)
     val = val * 2 * anp.pi / p
     return val
 
@@ -267,6 +288,44 @@ def generate_nuclear_attraction(a, b):
     return V
 
 
+"""
+def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd):
+    l1, m1, n1 = L1
+    l2, m2, n2 = L2
+    l3, m3, n3 = L3
+    l4, m4, n4 = L4
+
+    p = alpha + beta
+    q = gamma + delta
+    quotient = (p * q)/(p + q)
+
+    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta,
+                      Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
+    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta,
+                      Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
+
+
+    e1 = anp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1+l2+1)])
+    e2 = anp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1+m2+1)])
+    e3 = anp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1+n2+1)])
+    e4 = anp.array([((-1) ** tau) * expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) for tau in range(l3+l4+1)])
+    e5 = anp.array([((-1) ** nu) * expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) for nu in range(m3+m4+1)])
+    e6 = anp.array([((-1) ** phi) * expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) for phi in range(n3+n4+1)])
+
+    val = 0.0
+    for t in range(l1+l2+1):
+        for u in range(m1+m2+1):
+            for v in range(n1+n2+1):
+                for tau in range(l3+l4+1):
+                    for nu in range(m3+m4+1):
+                        for phi in range(n3+n4+1):
+                            val = val + e1[t] * e2[u] * e3[v] * e4[tau] * e5[nu] * e6[phi] * R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
+
+    val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
+    return val
+"""
+
+
 def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd):
     """Electron repulsion between Gaussians"""
     l1, m1, n1 = L1
@@ -283,14 +342,6 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
     Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta,
                       Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
 
-
-    e1 = [expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1+l2+1)]
-    e2 = [expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1+m2+1)]
-    e3 = [expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1+n2+1)]
-    e4 = [((-1) ** tau) * expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) for tau in range(l3+l4+1)]
-    e5 = [((-1) ** nu) * expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) for nu in range(m3+m4+1)]
-    e6 = [((-1) ** phi) * expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) for phi in range(n3+n4+1)]
-
     val = 0.0
     for t in range(l1+l2+1):
         for u in range(m1+m2+1):
@@ -298,7 +349,14 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
                 for tau in range(l3+l4+1):
                     for nu in range(m3+m4+1):
                         for phi in range(n3+n4+1):
-                            val = val + e1[t] * e2[u] * e3[v] * e4[tau] * e5[nu] * e6[phi] * R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
+                            val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
+                                   expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
+                                   expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
+                                   expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) * \
+                                   expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) * \
+                                   expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) * \
+                                   ((-1) ** (tau + nu + phi)) * \
+                                   R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
 
     val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
     return val
