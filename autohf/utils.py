@@ -1,7 +1,7 @@
 """
 Utility functions
 """
-import autograd.numpy as anp
+import jax.numpy as jnp
 
 
 def build_param_space(params, args):
@@ -22,14 +22,14 @@ def build_param_space(params, args):
 
 def build_arr(dims, index):
     """Builds a matrix"""
-    return anp.bincount([anp.ravel_multi_index(index, dims)], None, anp.prod(dims)).reshape(dims)
+    return jnp.bincount([jnp.ravel_multi_index(index, dims)], None, jnp.prod(dims)).reshape(dims)
 
 
 def cartesian_prod(*args):
     """Cartesian product of arrays"""
     if len(args) == 1:
-        return anp.array(args[0])
+        return jnp.array(args[0])
     return cartesian_prod(
-        anp.transpose([anp.tile(args[0], len(args[1])), anp.repeat(args[1], len(args[0]))]),
+        jnp.transpose([jnp.tile(args[0], len(args[1])), jnp.repeat(args[1], len(args[0]))]),
         *args[2:]
     )

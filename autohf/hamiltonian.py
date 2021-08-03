@@ -1,7 +1,7 @@
 """
 Post-processing of Hartree-Fock results and generation of Hamiltonians
 """
-import autograd.numpy as anp
+import jax.numpy as jnp
 from .hartreefock import *
 from .utils import cartesian_prod, build_arr
 import openfermion
@@ -12,8 +12,8 @@ def electron_integrals(num_elec, charge, atomic_orbitals):
     """Returns the one and two electron integrals"""
     def I(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
-        two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
+        one = jnp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
+        two = jnp.swapaxes(jnp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
         return one, two
     return I
 
@@ -22,16 +22,16 @@ def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, ac
     """Returns the one and two electron integrals flattened into a 1D array"""
     def I(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
-        two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
+        one = jnp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
+        two = jnp.swapaxes(jnp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
 
         core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)
-        return anp.concatenate((anp.array([core]), one_elec.flatten(), two_elec.flatten()))
+        return jnp.concatenate((jnp.array([core]), one_elec.flatten(), two_elec.flatten()))
     return I
 
 
 def distance(pair):
-    return anp.sqrt(((pair[0] - pair[1]) ** 2).sum())
+    return jnp.sqrt(((pair[0] - pair[1]) ** 2).sum())
 
 
 def nuclear_energy(charges):
@@ -79,7 +79,7 @@ def get_active_space_integrals(one_body_integrals, two_body_integrals, occupied_
                               two_body_integrals[i][j][i][j])
 
     # Modified one electron integrals
-    one_body_integrals_new = anp.zeros(one_body_integrals.shape)
+    one_body_integrals_new = jnp.zeros(one_body_integrals.shape)
     for u in active_indices:
         for v in active_indices:
             for i in occupied_indices:
@@ -90,13 +90,13 @@ def get_active_space_integrals(one_body_integrals, two_body_integrals, occupied_
 
     # Restrict integral ranges and change M appropriately
     return (core_constant,
-            one_body_integrals_new[anp.ix_(active_indices, active_indices)],
-            two_body_integrals[anp.ix_(active_indices, active_indices, active_indices, active_indices)])
+            one_body_integrals_new[jnp.ix_(active_indices, active_indices)],
+            two_body_integrals[jnp.ix_(active_indices, active_indices, active_indices, active_indices)])
 
 
 def hf_energy(num_elec, charge, atomic_orbitals):
     """Returns the Hartree-Fock energy"""
     def energy(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        return anp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock)) + nuclear_energy(charge)(atom_R)
+        return jnp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock)) + nuclear_energy(charge)(atom_R)
     return energy

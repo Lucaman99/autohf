@@ -1,11 +1,13 @@
 """
 Computing integrals relating to Hartree-Fock calculations
 """
-import autograd.numpy as anp
-import autograd.scipy as sc
+import jax.numpy as jnp
+import jax.scipy as sc
 from .utils import build_param_space, build_arr
 import numpy as np
-from autograd.extend import primitive, defvjp, defjvp
+import jax
+from jax import custom_jvp
+from functools import partial
 
 
 def double_factorial(n):
@@ -25,8 +27,8 @@ def gaussian_norm(L, alpha):
     l, m, n = L
     L_sum = l + m + n
 
-    coeff = ((2 / anp.pi) ** 0.75) * ((2 ** L_sum) * (alpha ** (0.5 * L_sum + 0.75)))
-    N = 1 / anp.sqrt(double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1))
+    coeff = ((2 / jnp.pi) ** 0.75) * ((2 ** L_sum) * (alpha ** (0.5 * L_sum + 0.75)))
+    N = 1 / jnp.sqrt(double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1))
     return coeff * N
 
 
@@ -35,11 +37,11 @@ def atomic_norm(L, alpha, a):
     l, m, n = L
     L_sum = l + m + n
 
-    coeff = ((anp.pi ** (3/2)) / (2 ** L_sum))
+    coeff = ((jnp.pi ** (3/2)) / (2 ** L_sum))
     coeff = coeff * double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1)
 
-    s = ((a[:,anp.newaxis] * a) / ((alpha[:,anp.newaxis] + alpha) ** (L_sum + (3/2)))).sum()
-    return 1 / anp.sqrt(coeff * s)
+    s = ((a[:,jnp.newaxis] * a) / ((alpha[:,jnp.newaxis] + alpha) ** (L_sum + (3/2)))).sum()
+    return 1 / jnp.sqrt(coeff * s)
 
 
 def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
@@ -59,7 +61,7 @@ def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
             i, j, t = p
             c3 = t + 1
             if i == j == t == 0:
-                cs = cs + c * anp.exp(-1 * q * (Qx ** 2))
+                cs = cs + c * jnp.exp(-1 * q * (Qx ** 2))
             else:
                 v1, v2, v3 = t - 1 >= 0, t <= (i + j - 1), t <= (i + j - 2)
                 if j == 0:
@@ -94,7 +96,7 @@ def gaussian_overlap(alpha, L1, Ra, beta, L2, Rb):
     p = alpha + beta
     s = 1.0
     for i in range(3):
-        s = s * anp.sqrt(anp.pi / p) * expansion_coeff(L1[i], L2[i], 0, Ra[i], Rb[i], alpha, beta)
+        s = s * jnp.sqrt(jnp.pi / p) * expansion_coeff(L1[i], L2[i], 0, Ra[i], Rb[i], alpha, beta)
     return s
 
 
@@ -114,7 +116,7 @@ def generate_overlap(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * gaussian_overlap(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
+        return N1 * N2 * ((C1[:,jnp.newaxis] * C2) * gaussian_overlap(A1[:,jnp.newaxis], a.L, R1, A2, b.L, R2)).sum()
     return S
 
 
@@ -150,7 +152,7 @@ def generate_kinetic(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        return N1 * N2 * ((C1[:,anp.newaxis] * C2) * gaussian_kinetic(A1[:,anp.newaxis], a.L, R1, A2, b.L, R2)).sum()
+        return N1 * N2 * ((C1[:,jnp.newaxis] * C2) * gaussian_kinetic(A1[:,jnp.newaxis], a.L, R1, A2, b.L, R2)).sum()
     return T
 
 
@@ -169,36 +171,37 @@ def rising_factorial(n, lim):
         prod *= n + k
     return prod
 
+import scipy
 
-@primitive
+@partial(custom_jvp, nondiff_argnums=(0,))
 def boys_fn(n, t):
-    val = anp.piecewise(t, [t == 0, t != 0],
-                        [lambda t : 1 / (2 * n + 1),
-                         lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
+    val = jnp.where(t == 0, 1 / (2 * n + 1), scipy.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n))))
     return val
 
 
-@primitive
+@partial(custom_jvp, nondiff_argnums=(0,))
 def boys_fn_grad(n, t):
-    val = anp.piecewise(t, [t == 0, t != 0], [lambda t : -1 / (2 * n + 3), lambda t : -1 * boys_fn(n + 1, t)])
+    val = jnp.where(t == 0, -1 / (2 * n + 3), -1 * boys_fn(n + 1, t))
     return val
 
 
-defvjp(boys_fn_grad,
-       None,
-       lambda ans, n, t: lambda g: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
-    )
+@boys_fn_grad.defjvp
+def boys_fn_grad_jvp(n, primals, tangents):
+  t, = primals
+  t_dot, = tangents
+  return boys_fn_grad(n, t), jnp.where(t == 0, 1 / (2 * n + 5), boys_fn(n + 2, t)) * t_dot
 
 
-defvjp(boys_fn,
-       None,
-       lambda ans, n, t: lambda g: g * boys_fn_grad(n, t)
-    )
+@boys_fn.defjvp
+def boys_fn_jvp(n, primals, tangents):
+    t, = primals
+    t_dot, = tangents
+    return boys_fn(n, t), boys_fn_grad(n, t) * t_dot
 
 
 def gaussian_prod(alpha, Ra, beta, Rb):
     """Returns the Gaussian product center"""
-    return (alpha * anp.array(Ra) + beta * anp.array(Rb)) / (alpha + beta)
+    return (alpha * jnp.array(Ra) + beta * jnp.array(Rb)) / (alpha + beta)
 
 
 def R(t, u, v, n, p, DR):
@@ -229,40 +232,20 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     l1, m1, n1 = L1
     l2, m2, n2 = L2
     p = alpha + beta
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
-    DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
+    P = gaussian_prod(alpha, Ra[:,jnp.newaxis,jnp.newaxis], beta, Rb[:,jnp.newaxis,jnp.newaxis])
+    DR = P - jnp.array(C)[:,jnp.newaxis,jnp.newaxis]
 
-    e1 = anp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1 + l2 + 1)])
-    e2 = anp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1 + m2 + 1)])
-    e3 = anp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1 + n2 + 1)])
+    e1 = jnp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1 + l2 + 1)])
+    e2 = jnp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1 + m2 + 1)])
+    e3 = jnp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1 + n2 + 1)])
 
     val = 0.0
     for t in range(l1 + l2 + 1):
         for u in range(m1 + m2 + 1):
             for v in range(n1 + n2 + 1):
                 val = val + e1[t] * e2[u] * e3[v] * R(t, u, v, 0, p, DR)
-    val = val * 2 * anp.pi / p
+    val = val * 2 * jnp.pi / p
     return val
-
-"""
-def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
-    l1, m1, n1 = L1
-    l2, m2, n2 = L2
-    p = alpha + beta
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis], beta, Rb[:,anp.newaxis,anp.newaxis])
-    DR = P - anp.array(C)[:,anp.newaxis,anp.newaxis]
-
-    val = 0.0
-    for t in range(l1 + l2 + 1):
-        for u in range(m1 + m2 + 1):
-            for v in range(n1 + n2 + 1):
-                val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
-                            expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
-                            expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
-                            R(t, u, v, 0, p, DR)
-    val = val * 2 * anp.pi / p
-    return val
-"""
 
 
 def generate_nuclear_attraction(a, b):
@@ -278,7 +261,7 @@ def generate_nuclear_attraction(a, b):
         C2 = C2 * gaussian_norm(b.L, A2)
         N1, N2 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2)
 
-        val = N1 * N2 * ((C1 * C2[:,anp.newaxis]) * nuclear_attraction(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, C)).sum()
+        val = N1 * N2 * ((C1 * C2[:,jnp.newaxis]) * nuclear_attraction(A1, a.L, R1, A2[:,jnp.newaxis], b.L, R2, C)).sum()
         return val
     return V
 
@@ -293,18 +276,18 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
     q = gamma + delta
     quotient = (p * q)/(p + q)
 
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta,
-                      Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
-    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta,
-                      Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
+    P = gaussian_prod(alpha, Ra[:,jnp.newaxis,jnp.newaxis,jnp.newaxis,jnp.newaxis], beta,
+                      Rb[:,jnp.newaxis,jnp.newaxis,jnp.newaxis,jnp.newaxis]) # A and B composite center
+    Q = gaussian_prod(gamma, Rc[:,jnp.newaxis,jnp.newaxis,jnp.newaxis,jnp.newaxis], delta,
+                      Rd[:,jnp.newaxis,jnp.newaxis,jnp.newaxis,jnp.newaxis]) # C and D composite center
 
 
-    e1 = anp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1+l2+1)])
-    e2 = anp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1+m2+1)])
-    e3 = anp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1+n2+1)])
-    e4 = anp.array([((-1) ** tau) * expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) for tau in range(l3+l4+1)])
-    e5 = anp.array([((-1) ** nu) * expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) for nu in range(m3+m4+1)])
-    e6 = anp.array([((-1) ** phi) * expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) for phi in range(n3+n4+1)])
+    e1 = jnp.array([expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) for t in range(l1+l2+1)])
+    e2 = jnp.array([expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) for u in range(m1+m2+1)])
+    e3 = jnp.array([expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) for v in range(n1+n2+1)])
+    e4 = jnp.array([((-1) ** tau) * expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) for tau in range(l3+l4+1)])
+    e5 = jnp.array([((-1) ** nu) * expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) for nu in range(m3+m4+1)])
+    e6 = jnp.array([((-1) ** phi) * expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) for phi in range(n3+n4+1)])
 
     val = 0.0
     for t in range(l1+l2+1):
@@ -315,44 +298,8 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
                         for phi in range(n3+n4+1):
                             val = val + e1[t] * e2[u] * e3[v] * e4[tau] * e5[nu] * e6[phi] * R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
 
-    val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
+    val = val * 2 * (jnp.pi ** 2.5) / (p * q * jnp.sqrt(p+q))
     return val
-
-"""
-def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd):
-    l1, m1, n1 = L1
-    l2, m2, n2 = L2
-    l3, m3, n3 = L3
-    l4, m4, n4 = L4
-
-    p = alpha + beta
-    q = gamma + delta
-    quotient = (p * q)/(p + q)
-
-    P = gaussian_prod(alpha, Ra[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], beta,
-                      Rb[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # A and B composite center
-    Q = gaussian_prod(gamma, Rc[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis], delta,
-                      Rd[:,anp.newaxis,anp.newaxis,anp.newaxis,anp.newaxis]) # C and D composite center
-
-    val = 0.0
-    for t in range(l1+l2+1):
-        for u in range(m1+m2+1):
-            for v in range(n1+n2+1):
-                for tau in range(l3+l4+1):
-                    for nu in range(m3+m4+1):
-                        for phi in range(n3+n4+1):
-                            val = val + expansion_coeff(l1, l2, t, Ra[0], Rb[0], alpha, beta) * \
-                                   expansion_coeff(m1, m2, u, Ra[1], Rb[1], alpha, beta) * \
-                                   expansion_coeff(n1, n2, v, Ra[2], Rb[2], alpha, beta) * \
-                                   expansion_coeff(l3, l4, tau, Rc[0], Rd[0], gamma, delta) * \
-                                   expansion_coeff(m3, m4, nu, Rc[1], Rd[1], gamma, delta) * \
-                                   expansion_coeff(n3, n4, phi, Rc[2], Rd[2], gamma, delta) * \
-                                   ((-1) ** (tau + nu + phi)) * \
-                                   R(t + tau, u + nu, v + phi, 0, quotient, P - Q)
-
-    val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
-    return val
-"""
 
 
 def generate_two_electron(a, b, c, d):
@@ -375,9 +322,9 @@ def generate_two_electron(a, b, c, d):
         N1, N2, N3, N4 = atomic_norm(a.L, A1, C1), atomic_norm(b.L, A2, C2), atomic_norm(c.L, A3, C3), atomic_norm(d.L, A4, C4)
 
         val = N1 * N2 * N3 * N4 * (
-                (C1 * C2[:,anp.newaxis] * C3[:,anp.newaxis,anp.newaxis] * C4[:,anp.newaxis,anp.newaxis,anp.newaxis]) *
-                electron_repulsion(A1, a.L, R1, A2[:,anp.newaxis], b.L, R2, A3[:,anp.newaxis,anp.newaxis], c.L, R3,
-                                   A4[:,anp.newaxis,anp.newaxis,anp.newaxis], d.L, R4)
+                (C1 * C2[:,jnp.newaxis] * C3[:,jnp.newaxis,jnp.newaxis] * C4[:,jnp.newaxis,jnp.newaxis,jnp.newaxis]) *
+                electron_repulsion(A1, a.L, R1, A2[:,jnp.newaxis], b.L, R2, A3[:,jnp.newaxis,jnp.newaxis], c.L, R3,
+                                   A4[:,jnp.newaxis,jnp.newaxis,jnp.newaxis], d.L, R4)
         ).sum()
         return val
     return EE
