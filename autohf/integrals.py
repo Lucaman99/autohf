@@ -225,7 +225,6 @@ def R(t, u, v, n, p, DR):
     return val
 
 
-"""
 def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
     l1, m1, n1 = L1
     l2, m2, n2 = L2
@@ -244,14 +243,9 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
                 val = val + e1[t] * e2[u] * e3[v] * R(t, u, v, 0, p, DR)
     val = val * 2 * anp.pi / p
     return val
+
 """
-
-
 def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
-    """
-    Computes nuclear attraction between Gaussian primitives
-    Note that C is the coordinates of the nuclear centre
-    """
     l1, m1, n1 = L1
     l2, m2, n2 = L2
     p = alpha + beta
@@ -268,6 +262,7 @@ def nuclear_attraction(alpha, L1, Ra, beta, L2, Rb, C):
                             R(t, u, v, 0, p, DR)
     val = val * 2 * anp.pi / p
     return val
+"""
 
 
 def generate_nuclear_attraction(a, b):
@@ -288,7 +283,6 @@ def generate_nuclear_attraction(a, b):
     return V
 
 
-"""
 def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd):
     l1, m1, n1 = L1
     l2, m2, n2 = L2
@@ -323,11 +317,9 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
 
     val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
     return val
+
 """
-
-
 def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd):
-    """Electron repulsion between Gaussians"""
     l1, m1, n1 = L1
     l2, m2, n2 = L2
     l3, m3, n3 = L3
@@ -360,6 +352,7 @@ def electron_repulsion(alpha, L1, Ra, beta, L2, Rb, gamma, L3, Rc, delta, L4, Rd
 
     val = val * 2 * (anp.pi ** 2.5) / (p * q * anp.sqrt(p+q))
     return val
+"""
 
 
 def generate_two_electron(a, b, c, d):

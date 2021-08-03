@@ -22,11 +22,10 @@ def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, ac
     """Returns the one and two electron integrals flattened into a 1D array"""
     def I(atom_R, *args):
         v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
-        one_elec = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
-        two_elec = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
+        one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
+        two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
 
-        core = 0.0
-        #core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)
+        core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)
         return anp.concatenate((anp.array([core]), one_elec.flatten(), two_elec.flatten()))
     return I
 
