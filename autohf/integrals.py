@@ -6,6 +6,8 @@ import autograd.scipy as sc
 from .utils import build_param_space, build_arr
 import numpy as np
 from autograd.extend import primitive, defvjp, defjvp
+from autograd.differential_operators import make_jvp_reversemode as mjr
+import autograd
 
 
 def double_factorial(n):
@@ -184,17 +186,18 @@ def boys_fn_grad(n, t):
     return val
 
 
-defvjp(boys_fn_grad,
+defjvp(boys_fn_grad,
        None,
-       lambda ans, n, t: lambda g: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
+       lambda g, ans, n, t: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
     )
 
-
-defvjp(boys_fn,
+defjvp(boys_fn,
        None,
-       lambda ans, n, t: lambda g: g * boys_fn_grad(n, t)
+       lambda g, ans, n, t: g * boys_fn_grad(n, t)
     )
 
+#autograd.core.primitive_jvps[boys_fn] = mjr(boys_fn_grad)
+#autograd.core.primitive_jvps[boys_fn] = mjr(boys_fn)
 
 def gaussian_prod(alpha, Ra, beta, Rb):
     """Returns the Gaussian product center"""

@@ -11,7 +11,7 @@ from pennylane import qchem
 def electron_integrals(num_elec, charge, atomic_orbitals):
     """Returns the one and two electron integrals"""
     def I(atom_R, *args):
-        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
+        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
         return one, two
@@ -21,7 +21,7 @@ def electron_integrals(num_elec, charge, atomic_orbitals):
 def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, active=None):
     """Returns the one and two electron integrals flattened into a 1D array"""
     def I(atom_R, *args):
-        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
+        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
 
@@ -97,6 +97,6 @@ def get_active_space_integrals(one_body_integrals, two_body_integrals, occupied_
 def hf_energy(num_elec, charge, atomic_orbitals):
     """Returns the Hartree-Fock energy"""
     def energy(atom_R, *args):
-        v_fock, w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
+        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         return anp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock)) + nuclear_energy(charge)(atom_R)
     return energy
