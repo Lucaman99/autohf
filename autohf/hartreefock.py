@@ -217,8 +217,6 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
         P = density_matrix(num_elec, coeffs)
 
         counter = 0
-        F = F_tilde_initial
-        """
         while not self_consistent:
             JM = anp.einsum('pqrs,rs->pq', eri_tensor, P)
             KM = anp.einsum('psqr,rs->pq', eri_tensor, P)
@@ -236,6 +234,5 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
             P = P_new
 
             counter += 1
-        """
-        return w, F, H_core, eri_tensor
+        return w_fock, F, H_core, eri_tensor
     return HF
