@@ -30,6 +30,12 @@ def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, ac
     return I
 
 
+def electron_integrals_known(one, two, occupied=None, active=None):
+    """Returns the one and two electron integrals flattened into a 1D array"""
+    core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)
+    return anp.concatenate((anp.array([core]), one_elec.flatten(), two_elec.flatten()))
+
+
 def distance(pair):
     return anp.sqrt(((pair[0] - pair[1]) ** 2).sum())
 

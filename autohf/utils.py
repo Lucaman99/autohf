@@ -33,3 +33,9 @@ def cartesian_prod(*args):
         anp.transpose([anp.tile(args[0], len(args[1])), anp.repeat(args[1], len(args[0]))]),
         *args[2:]
     )
+
+def close(val1, val2):
+    """Standardized checking for closeness of floats/arrays of floats. This method is
+    defined in case we decide to change rtol/atol, in which case this change will be reflected
+    across the library"""
+    return anp.isclose(val1, val2, atol=(1e-16), rtol=(1e-16))

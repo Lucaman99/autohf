@@ -3,7 +3,7 @@ Computing integrals relating to Hartree-Fock calculations
 """
 import autograd.numpy as anp
 import autograd.scipy as sc
-from .utils import build_param_space, build_arr
+from .utils import build_param_space, build_arr, close
 import numpy as np
 from autograd.extend import primitive, defvjp, defjvp
 from autograd.differential_operators import make_jvp_reversemode as mjr
@@ -174,21 +174,20 @@ def rising_factorial(n, lim):
 
 @primitive
 def boys_fn(n, t):
-    val = anp.piecewise(t, [t == 0, t != 0],
+    val = anp.piecewise(t, [close(t, 0.0), anp.bitwise_not(close(t, 0.0))],
                         [lambda t : 1 / (2 * n + 1),
                          lambda t : sc.special.gamma(0.5 + n) * sc.special.gammainc(0.5 + n, t) / (2 * (t ** (0.5 + n)))])
     return val
 
-
 @primitive
 def boys_fn_grad(n, t):
-    val = anp.piecewise(t, [t == 0, t != 0], [lambda t : -1 / (2 * n + 3), lambda t : -1 * boys_fn(n + 1, t)])
+    val = anp.piecewise(t, [close(t, 0.0), anp.bitwise_not(close(t, 0.0))], [lambda t : -1 / (2 * n + 3), lambda t : -1 * boys_fn(n + 1, t)])
     return val
 
 
 defjvp(boys_fn_grad,
        None,
-       lambda g, ans, n, t: g * anp.piecewise(t, [t == 0, t != 0], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
+       lambda g, ans, n, t: g * anp.piecewise(t, [close(t, 0.0), anp.bitwise_not(close(t, 0.0))], [lambda t : 1 / (2 * n + 5), lambda t : boys_fn(n + 2, t)])
     )
 
 defjvp(boys_fn,

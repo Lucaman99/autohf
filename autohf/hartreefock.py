@@ -142,10 +142,29 @@ autograd.extend.defjvp(eigh_val_fn, eigh_val_grad)
 def eigh(M):
     return anp.linalg.eigh(M)
 
-
 def _T(x): return anp.swapaxes(x, -1, -2)
 def _H(x): return anp.conj(_T(x))
 def symmetrize(x): return (x + _H(x)) / 2
+
+
+def take_along_axis(arr, ind, axis=0):
+    if axis < 0:
+       if axis >= -arr.ndim:
+           axis += arr.ndim
+    ind_shape = (1,) * ind.ndim
+    ins_ndim = ind.ndim - (arr.ndim - 1)   #inserted dimensions
+
+    dest_dims = list(range(axis)) + [None] + list(range(axis+ins_ndim, ind.ndim))
+
+    # could also call np.ix_ here with some dummy arguments, then throw those results away
+    inds = []
+    for dim, n in zip(dest_dims, arr.shape):
+        if dim is None:
+            inds.append(ind)
+        else:
+            ind_shape_dim = ind_shape[:dim] + (-1,) + ind_shape[dim+1:]
+            inds.append(anp.arange(n).reshape(ind_shape_dim))
+    return arr[tuple(inds)]
 
 
 def eigh_jvp(a_tangent, ans, a):
@@ -153,7 +172,7 @@ def eigh_jvp(a_tangent, ans, a):
     w, v = ans
     a_dot = a_tangent
     a_sym = symmetrize(a)
-    w = w.astype(a.dtype)
+    #w = w.astype(a.dtype)
     dot = anp.dot
     vdag_adot = dot(_H(v), a_dot)
     vdag_adot_v = dot(vdag_adot, v)
@@ -165,15 +184,15 @@ def eigh_jvp(a_tangent, ans, a):
                      else anp.eye(a.shape[-1], dtype=bool))
 
     if handle_degeneracies:
-        w_dot, v_dot = anp.linalg.eigh(vdag_adot_v * same_subspace)
+        w_dot, v_dot = eigh(vdag_adot_v * same_subspace)
         # Reorder these into sorted order of the original eigenvalues.
         # TODO(shoyer): consider rewriting with an explicit loop over degenerate
         # subspaces instead?
         v2 = dot(v, v_dot)
-        w2 = anp.einsum('...ij,...jk,...ki->...i', _H(v2), a_sym, v2).real
+        w2 = anp.real(anp.einsum('...ij,...jk,...ki->...i', _H(v2), a_sym, v2))
         order = anp.argsort(w2, axis=-1)
-        v = anp.take_along_axis(v2, order[..., anp.newaxis, :], axis=-1)
-        dw = anp.take_along_axis(w_dot, order, axis=-1)
+        v = take_along_axis(v2, order[..., anp.newaxis, :], axis=-1)
+        dw = take_along_axis(w_dot, order, axis=-1)
         deltas = w[..., anp.newaxis, :] - w[..., anp.newaxis]
         same_subspace = abs(deltas) < epsilon
     else:
@@ -186,6 +205,7 @@ def eigh_jvp(a_tangent, ans, a):
 
 defjvp(eigh, eigh_jvp)
 norm = lambda x : anp.sqrt(anp.sum(anp.dot(x, x)))
+
 
 def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
     """Performs the Hartree-Fock procedure
