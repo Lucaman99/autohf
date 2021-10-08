@@ -8,7 +8,7 @@ from .utils import build_param_space
 
 # Functionality for loading default values for basis functions
 
-periodic_table = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4}
+periodic_table = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'O' : 8, 'N': 7, 'C':6, 'P':15}
 # TODO: Add more elements to the periodic table!
 
 

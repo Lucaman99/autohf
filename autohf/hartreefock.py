@@ -6,6 +6,8 @@ import autograd.numpy as anp
 from .utils import build_param_space, build_arr
 from autograd.extend import primitive, defvjp, defjvp
 import autograd
+import algopy
+from algopy import UTPM
 
 
 def overlap_matrix(atomic_orbitals):
@@ -140,7 +142,13 @@ autograd.extend.defjvp(eigh_val_fn, eigh_val_grad)
 
 @primitive
 def eigh(M):
-    return anp.linalg.eigh(M)
+    v, w = anp.linalg.eigh(M)
+    return v, w
+
+def norm_eigh(M):
+    v, w = eigh(M)
+    new_w = anp.where(w[0] <= 0, -w, w)
+    return v, new_w
 
 def _T(x): return anp.swapaxes(x, -1, -2)
 def _H(x): return anp.conj(_T(x))
@@ -204,10 +212,79 @@ def eigh_jvp(a_tangent, ans, a):
     return dw, dv
 
 defjvp(eigh, eigh_jvp)
+
+@primitive
+def cracked_eigh(M):
+    v, w = anp.linalg.eigh(M)
+    return v, w
+
+@primitive
+def cracked_eigval(a):
+    dw, dv = algopy.eigh(a)
+    return dw
+
+@primitive
+def cracked_eigvec(a):
+    dw, dv = algopy.eigh(a)
+    return dv
+
+@primitive
+def c_eigval_jacobian(a):
+    """Eigenvalue Jacobian"""
+    x = UTPM.init_jacobian(a)
+    y = cracked_eigval(x)
+    algopy_jacobian = UTPM.extract_jacobian(y)
+    return algopy_jacobian
+
+@primitive
+def c_eigvec_jacobian(a):
+    """Eigenvector Jacobian"""
+    x = UTPM.init_jacobian(a)
+    y = cracked_eigvec(x)
+    algopy_jacobian = UTPM.extract_jacobian(y)
+    return algopy_jacobian
+
+
+def c_hvp_eigval(a_tangent, ans, a):
+    """Hessian vector product --> jvp of eigval jacobian"""
+    x = UTPM.init_hessian(a)
+    y = cracked_eigval(x.reshape(a.shape))
+    H = np.zeros((a.shape[0], a.shape[0], a.shape[0]))
+    for i in range(a.shape[0]):
+        H[i] = UTPM.extract_hessian(a.shape[0], y[i])
+    out = H.reshape((a.shape[0], a.shape[0] ** 2)) @ a_tangent.flatten()
+    return out
+
+
+def c_hvp_eigvec(a_tangent, ans, a):
+    """Hessian vector product --> jvp of eigvec jacobian"""
+    x = UTPM.init_hessian(a)
+    y = cracked_eigvec(x.reshape(a.shape))
+    H = np.zeros((a.shape[0], a.shape[0], a.shape[0], a.shape[0]))
+    for i in range(a.shape[0]):
+        for j in range(a.shape[0]):
+            H[i][j] = UTPM.extract_hessian(a.shape[0], y[i][j])
+
+    return np.dot(H.reshape((a.shape[0], a.shape[0], a.shape[0] ** 2)), a_tangent.flatten()).reshape(a.shape)
+
+
+def c_eigval_jvp(a_tangent, ans, a):
+    out = anp.array(c_eigval_jacobian(a) @ a_tangent.flatten())
+    return out
+
+
+def c_eigvec_jvp(a_tangent, ans, a):
+    return anp.array(c_eigvec_jacobian(a) @ a_tangent.flatten()).reshape(a.shape)
+
+defjvp(cracked_eigval, c_eigval_jvp)
+defjvp(cracked_eigvec, c_eigvec_jvp)
+defjvp(c_eigval_jacobian, c_hvp_eigval)
+defjvp(c_eigvec_jacobian, c_hvp_eigvec)
+
 norm = lambda x : anp.sqrt(anp.sum(anp.dot(x, x)))
 
 
-def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
+def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8, cracked=False):
     """Performs the Hartree-Fock procedure
 
     Note that this method does not necessarily build matrices using the methods
@@ -223,15 +300,30 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
 
         F_initial = H_core
 
+        # Fudge factor!
+        convergence = 1e-8
+        fudge = anp.array(np.linspace(0, 1, S.shape[0])) * convergence
+        shift = anp.diag(fudge)
+
+        S = S + shift
+
         # Builds the X matrix
-        v, w = eigh(S)
+        if cracked:
+            v = cracked_eigval(S)
+            w = cracked_eigvec(S)
+        else:
+            v, w = norm_eigh(S)
         v = anp.array([1 / anp.sqrt(r) for r in v])
         diag_mat, w_inv = anp.diag(v), w.T
         X = w @ diag_mat @ w_inv
 
         # Constructs F_tilde and finds the initial coefficients
         F_tilde_initial = X.T @ F_initial @ X
-        v_fock, w_fock = eigh(F_tilde_initial)
+        F_tilde_initial = F_tilde_initial + shift
+        if cracked:
+            w_fock = cracked_eigvec(F_tilde_initial)
+        else:
+            v_fock, w_fock = norm_eigh(F_tilde_initial)
 
         coeffs = X @ w_fock
         P = density_matrix(num_elec, coeffs)
@@ -244,9 +336,13 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
 
             F = H_core + E_mat
             F_tilde = anp.dot(X.T, anp.dot(F, X))
+            F_tilde = F_tilde + shift
 
             # Solve for eigenvalues and eigenvectors
-            v_fock, w_fock = eigh(F_tilde)
+            if cracked:
+                w_fock = cracked_eigvec(F_tilde)
+            else:
+                v_fock, w_fock = norm_eigh(F_tilde)
             w_fock = X @ w_fock
             P_new = density_matrix(num_elec, w_fock)
 
