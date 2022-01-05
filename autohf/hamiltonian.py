@@ -102,7 +102,9 @@ def get_active_space_integrals(one_body_integrals, two_body_integrals, occupied_
 
 
 def hf_energy(num_elec, charge, atomic_orbitals):
-    """Returns the Hartree-Fock energy"""
+    """
+    Returns the Hartree-Fock energy
+    """
     def energy(atom_R, *args):
         w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         return anp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock)) + nuclear_energy(charge)(atom_R)

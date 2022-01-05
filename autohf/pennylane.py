@@ -1,13 +1,15 @@
 """AutoHF + PennyLane"""
 import pennylane as qml
 import numpy as np
-import autohf as hf
 import autograd.numpy as anp
 import autograd
 from autograd.differential_operators import make_jvp
 from tqdm.notebook import tqdm
 import bigvqe as bv
 from pennylane import qchem
+
+from .hamiltonian import *
+from .orbitals import *
 
 
 angs_bohr = 1.8897259885789
@@ -18,14 +20,14 @@ def generate_basis_set(molecule):
     """
     basis_name = molecule.basis_name
     structure = molecule.symbols
-    basis_params = hf.basis_set_params(basis_name, structure)
+    basis_params = basis_set_params(basis_name, structure)
     hf_b = []
 
     for b in basis_params:
         t = []
         for func in b:
             L, exp, coeff = func
-            t.append(hf.AtomicBasisFunction(L, C=anp.array(coeff), A=anp.array(exp)))
+            t.append(AtomicBasisFunction(L, C=anp.array(coeff), A=anp.array(exp)))
         hf_b.append(t)
     return hf_b
 
@@ -70,14 +72,14 @@ def hamiltonian(molecule, wires):
             arguments.extend([[Ri[i]]] * len(b))
             new_b_set.extend(b)
 
-        integrals = hf.electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active, cracked=False)(list(Ri), *arguments)
+        integrals = electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active)(list(Ri), *arguments)
 
         n = len(active)
         num = (n ** 2) + 1
 
         core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape((n, n, n, n))
-        nuc_energy = core_ad + hf.nuclear_energy(charges)(Ri)
-        return hf.build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis, multiplicity=molecule.mult, charge=molecule.charge)
+        nuc_energy = core_ad + nuclear_energy(charges)(Ri)
+        return build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis, multiplicity=molecule.mult, charge=molecule.charge)
     return H
 
 
@@ -111,7 +113,7 @@ def d_hamiltonian(molecule, wires):
             return re, *arguments
 
         new_b_set = sum(hf_b, [])
-        fn = lambda r : hf.electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active, cracked=False)(*transform(r))
+        fn = lambda r : electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active)(*transform(r))
         integrals = make_jvp(fn)(R)(vec)[1]
 
         n = len(active)
@@ -119,9 +121,9 @@ def d_hamiltonian(molecule, wires):
         core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape(
             (n, n, n, n))
 
-        nuc_fn = autograd.grad(lambda r : hf.nuclear_energy(charges)(re_fn(r)))(R)
+        nuc_fn = autograd.grad(lambda r : nuclear_energy(charges)(re_fn(r)))(R)
         nuc_energy = core_ad + np.dot(nuc_fn, vec)
-        return hf.build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis, multiplicity=molecule.mult, charge=molecule.charge)
+        return build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis, multiplicity=molecule.mult, charge=molecule.charge)
     return dH
 
 
@@ -155,7 +157,7 @@ def dd_hamiltonian(molecule, wires):
             return re, *arguments
 
         new_b_set = sum(hf_b, [])
-        fn = lambda r: hf.electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active, cracked=False)(
+        fn = lambda r: electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active)(
             *transform(r))
         d_fn = lambda r : make_jvp(fn)(r)(vec1)[1]
         integrals = make_jvp(d_fn)(R)(vec2)[1]
@@ -165,9 +167,9 @@ def dd_hamiltonian(molecule, wires):
         core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape(
             (n, n, n, n))
 
-        nuc_fn = autograd.hessian(lambda r: hf.nuclear_energy(charges)(re_fn(r)))(R)
+        nuc_fn = autograd.hessian(lambda r: nuclear_energy(charges)(re_fn(r)))(R)
         nuc_energy = core_ad + np.dot(vec1, nuc_fn @ vec2)
-        return hf.build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis,
+        return build_h_from_integrals(geometry, one_elec, two_elec, nuc_energy, wires, basis=basis,
                                          multiplicity=molecule.mult, charge=molecule.charge)
     return ddH
 
@@ -227,7 +229,7 @@ def hamiltonian_sparse(molecule, wires):
             return re, *arguments
 
         new_b_set = sum(hf_b, [])
-        integrals = hf.electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active, cracked=False)(
+        integrals = electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active)(
             *transform(R))
 
         n = len(active)
@@ -235,7 +237,33 @@ def hamiltonian_sparse(molecule, wires):
         core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape(
             (n, n, n, n))
 
-        nuc_fn = hf.nuclear_energy(charges)(re_fn(R))
+        nuc_fn = nuclear_energy(charges)(re_fn(R))
         nuc_energy = core_ad + nuc_fn
         return qml.SparseHamiltonian(bv.sparse_H(one_elec, two_elec, const=nuc_energy), wires=wires)
     return H
+
+
+def hf_energy_molecule(molecule):
+    """
+    Finds the Hartree-Fock energy of a molecule
+    """
+    # Basic info
+    num_elecs, charges = charge_structure(molecule)
+    hf_b = generate_basis_set(molecule)
+    new_b_set = sum(hf_b, [])
+
+    # Energy function
+    energy_fn = hf_energy(num_elecs, charges, new_b_set)
+
+    # New energy function
+    re_fn = lambda r: r.reshape((len(charges), 3))
+
+    def transform(r):
+        re = re_fn(r)
+        arguments = []
+        for i, b in enumerate(hf_b):
+            arguments.extend([[re[i]]] * len(b))
+        return re, *arguments
+        
+    E = lambda R : hf_energy(*transform(R))
+    return E
