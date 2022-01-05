@@ -8,10 +8,10 @@ import openfermion
 from pennylane import qchem
 
 
-def electron_integrals(num_elec, charge, atomic_orbitals, cracked=False):
+def electron_integrals(num_elec, charge, atomic_orbitals):
     """Returns the one and two electron integrals"""
     def I(atom_R, *args):
-        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals, cracked=cracked)(atom_R, *args)
+        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
         return one, two
@@ -19,10 +19,10 @@ def electron_integrals(num_elec, charge, atomic_orbitals, cracked=False):
 
 
 
-def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, active=None, cracked=False):
+def electron_integrals_flat(num_elec, charge, atomic_orbitals, occupied=None, active=None):
     """Returns the one and two electron integrals flattened into a 1D array"""
     def I(atom_R, *args):
-        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals, cracked=cracked)(atom_R, *args)
+        w_fock, fock, h_core, eri_tensor = hartree_fock(num_elec, charge, atomic_orbitals)(atom_R, *args)
         one = anp.einsum("qr,rs,st->qt", w_fock.T, h_core, w_fock)
         two = anp.swapaxes(anp.einsum("ab,cd,bdeg,ef,gh->acfh", w_fock.T, w_fock.T, eri_tensor, w_fock, w_fock), 1, 3)
         core, one_elec, two_elec = get_active_space_integrals(one, two, occupied_indices=occupied, active_indices=active)

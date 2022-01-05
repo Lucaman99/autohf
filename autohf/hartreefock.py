@@ -284,7 +284,7 @@ defjvp(c_eigvec_jacobian, c_hvp_eigvec)
 norm = lambda x : anp.sqrt(anp.sum(anp.dot(x, x)))
 
 
-def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8, cracked=False):
+def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
     """Performs the Hartree-Fock procedure
 
     Note that this method does not necessarily build matrices using the methods
@@ -307,12 +307,7 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8, cracked=False):
 
         S = S + shift
 
-        # Builds the X matrix
-        if cracked:
-            v = cracked_eigval(S)
-            w = cracked_eigvec(S)
-        else:
-            v, w = norm_eigh(S)
+        v, w = norm_eigh(S)
         v = anp.array([1 / anp.sqrt(r) for r in v])
         diag_mat, w_inv = anp.diag(v), w.T
         X = w @ diag_mat @ w_inv
@@ -320,10 +315,7 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8, cracked=False):
         # Constructs F_tilde and finds the initial coefficients
         F_tilde_initial = X.T @ F_initial @ X
         F_tilde_initial = F_tilde_initial + shift
-        if cracked:
-            w_fock = cracked_eigvec(F_tilde_initial)
-        else:
-            v_fock, w_fock = norm_eigh(F_tilde_initial)
+        v_fock, w_fock = norm_eigh(F_tilde_initial)
 
         coeffs = X @ w_fock
         P = density_matrix(num_elec, coeffs)
@@ -339,10 +331,7 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8, cracked=False):
             F_tilde = F_tilde + shift
 
             # Solve for eigenvalues and eigenvectors
-            if cracked:
-                w_fock = cracked_eigvec(F_tilde)
-            else:
-                v_fock, w_fock = norm_eigh(F_tilde)
+            v_fock, w_fock = norm_eigh(F_tilde)
             w_fock = X @ w_fock
             P_new = density_matrix(num_elec, w_fock)
 
