@@ -13,7 +13,7 @@ Schrodinger equation by taking linear combinations of atomic orbitals (LCAO). Th
 To install AutoHF, clone the repository and run:
 
 ```
-python setup.py build_ext --inplace install --user
+python3 setup.py build_ext --inplace install --user
 ```
 
 ### 2. Code Philosophy
