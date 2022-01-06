@@ -1,4 +1,19 @@
-"""AutoHF + PennyLane"""
+"""AutoHF + PennyLane
+
+Note that the input "molecules" to each of the below functions must be a class of the form
+
+class MoleculeName:
+
+    # Required
+    basis_name = "sto-3g"
+    symbols = ["H", "H"]
+    active_electrons = 2
+    active_orbitals = 2
+    charge = 0
+
+    # Optional
+    hf_geometry = HARTREE-FOCK GEOMETRY HERE
+"""
 import pennylane as qml
 import numpy as np
 import autograd.numpy as anp
@@ -22,14 +37,16 @@ def generate_basis_set(molecule):
     structure = molecule.symbols
     basis_params = basis_set_params(basis_name, structure)
     hf_b = []
+    num = 0
 
     for b in basis_params:
         t = []
         for func in b:
             L, exp, coeff = func
             t.append(AtomicBasisFunction(L, C=anp.array(coeff), A=anp.array(exp)))
+            num += 1
         hf_b.append(t)
-    return hf_b
+    return hf_b, num
 
 
 def charge_structure(molecule):
@@ -59,8 +76,8 @@ def hamiltonian(molecule, wires):
     structure = molecule.symbols
     num_elecs, charges = charge_structure(molecule)
     basis = molecule.basis_name
-    hf_b = generate_basis_set(molecule)
-    core, active = qchem.active_space(num_elecs, len(hf_b), active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+    hf_b, num = generate_basis_set(molecule)
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
 
     def H(R):
         Ri = R.reshape((len(charges), 3))
@@ -97,8 +114,8 @@ def d_hamiltonian(molecule, wires):
     structure = molecule.symbols
     num_elecs, charges = charge_structure(molecule)
     basis = molecule.basis_name
-    hf_b = generate_basis_set(molecule)
-    core, active = qchem.active_space(num_elecs, len(hf_b), active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+    hf_b, num = generate_basis_set(molecule)
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
 
     def dH(R, vec):
         re_fn = lambda r : r.reshape((len(charges), 3))
@@ -141,8 +158,8 @@ def dd_hamiltonian(molecule, wires):
     structure = molecule.symbols
     num_elecs, charges = charge_structure(molecule)
     basis = molecule.basis_name
-    hf_b = generate_basis_set(molecule) 
-    core, active = qchem.active_space(num_elecs, len(hf_b), active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+    hf_b, num = generate_basis_set(molecule) 
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
 
     def ddH(R, vec1, vec2):
         re_fn = lambda r: r.reshape((len(charges), 3))
@@ -215,8 +232,8 @@ def hamiltonian_sparse(molecule, wires):
     structure = molecule.symbols
     num_elecs, charges = charge_structure(molecule)
     basis = molecule.basis_name
-    hf_b = generate_basis_set(molecule)
-    core, active = qchem.active_space(num_elecs, len(hf_b), active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+    hf_b, num = generate_basis_set(molecule)
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
 
     def H(R):
         re_fn = lambda r: r.reshape((len(charges), 3))
@@ -243,13 +260,54 @@ def hamiltonian_sparse(molecule, wires):
     return H
 
 
+def d_hamiltonian_sparse(molecule, wires):
+    """
+    Generates the sparse representation of a hamiltonian derivative with respect to
+    a Hamiltonian using the BigVQE and AutoHF libraries.
+
+    Args
+        molecule: chemistry.Molecule object
+    Returns
+        scipy.coo_matrix
+    """
+    structure = molecule.symbols
+    num_elecs, charges = charge_structure(molecule)
+    basis = molecule.basis_name
+    hf_b, num = generate_basis_set(molecule)
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+
+    def dH(R, vec):
+        re_fn = lambda r : r.reshape((len(charges), 3))
+
+        def transform(r):
+            re = re_fn(r)
+            arguments = []
+            for i, b in enumerate(hf_b):
+                arguments.extend([[re[i]]] * len(b))
+            return re, *arguments
+
+        new_b_set = sum(hf_b, [])
+        fn = lambda r : electron_integrals_flat(num_elecs, charges, new_b_set, occupied=core, active=active)(*transform(r))
+        integrals = make_jvp(fn)(R)(vec)[1]
+
+        n = len(active)
+        num = (n ** 2) + 1
+        core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape(
+            (n, n, n, n))
+
+        nuc_fn = autograd.grad(lambda r : nuclear_energy(charges)(re_fn(r)))(R)
+        nuc_energy = core_ad + np.dot(nuc_fn, vec)
+        return qml.SparseHamiltonian(bv.sparse_H(one_elec, two_elec, const=nuc_energy), wires=wires)
+    return dH
+
+
 def hf_energy_molecule(molecule):
     """
     Finds the Hartree-Fock energy of a molecule
     """
     # Basic info
     num_elecs, charges = charge_structure(molecule)
-    hf_b = generate_basis_set(molecule)
+    hf_b, num = generate_basis_set(molecule)
     new_b_set = sum(hf_b, [])
 
     # Energy function
@@ -265,5 +323,29 @@ def hf_energy_molecule(molecule):
             arguments.extend([[re[i]]] * len(b))
         return re, *arguments
         
-    E = lambda R : hf_energy(*transform(R))
+    E = lambda R : energy_fn(*transform(R))
     return E
+
+
+def hf_energy_gradient(molecule):
+    """
+    Computes the gradient of the Hartree-Fock energy with respect to nuclear coordinates
+    """
+    fn = hf_energy_molecule(molecule)
+    gradient = lambda R, vec : make_jvp(fn)(R)(vec)[1] 
+    return gradient
+
+
+def hf_geometry(molecule, initial_geo, steps, epsilon=0.05, bar=True):
+    """
+    Finds the Hartree-Fock geometry of a molecule
+    """
+    geo = initial_geo
+    bar_range = tqdm(range(steps)) if bar else range(steps) 
+    grad = hf_energy_gradient(molecule)
+
+    for s in bar_range:
+        grad_vector = np.array([grad(geo, np.array([1.0 if i == j else 0.0 for i in range(len(geo))])) for j in range(len(geo))])
+        geo = geo - epsilon * grad_vector
+        print(geo)
+    return geo
