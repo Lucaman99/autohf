@@ -73,7 +73,7 @@ class AtomicBasisFunction:
 
         l, m, n = self.L
         x0, y0, z0 = R[0], R[1], R[2]
-        norm = atomic_norm(self.L, A, C)
+        norm = atomic_norm(self.L, anp.array(A), anp.array(C))
 
         def orbital_fn(r):
             x, y, z = r[0], r[1], r[2]

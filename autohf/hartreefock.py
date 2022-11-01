@@ -1,6 +1,7 @@
 """
 Methods for performing Hartree-Fock
 """
+from importlib_metadata import itertools
 from .integrals import *
 import autograd.numpy as anp
 from .utils import build_param_space, build_arr
@@ -8,6 +9,7 @@ from autograd.extend import primitive, defvjp, defjvp
 import autograd
 import algopy
 from algopy import UTPM
+import itertools
 
 
 def overlap_matrix(atomic_orbitals):
@@ -33,6 +35,14 @@ def density_matrix(num_elec, C):
     """
     return anp.dot(C[:,:num_elec//2],anp.conj(C[:,:num_elec//2]).T)
 
+
+def holomorphic_density_matrix(num_elec, C):
+    """
+    Computes the density matrix
+    TODO: Understand this!
+    TODO: Conjugate the second thing!
+    """
+    return anp.dot(C[:,:num_elec//2],C[:,:num_elec//2].T)
 
 def dict_ord(x, y):
     return x[1] <= y[1] if x[0] == y[0] else x[0] <= y[0]
@@ -145,8 +155,18 @@ def eigh(M):
     v, w = anp.linalg.eigh(M)
     return v, w
 
+@primitive
+def eig(M):
+    v, w = anp.linalg.eig(M)
+    return v, w
+
 def norm_eigh(M):
     v, w = eigh(M)
+    new_w = anp.where(w[0] <= 0, -w, w)
+    return v, new_w
+
+def norm_eig(M):
+    v, w = eig(M)
     new_w = anp.where(w[0] <= 0, -w, w)
     return v, new_w
 
@@ -284,7 +304,7 @@ defjvp(c_eigvec_jacobian, c_hvp_eigvec)
 norm = lambda x : anp.sqrt(anp.sum(anp.dot(x, x)))
 
 
-def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
+def hartree_fock(num_elec, charge, atomic_orbitals, guess=None, tol=1e-8):
     """Performs the Hartree-Fock procedure
 
     Note that this method does not necessarily build matrices using the methods
@@ -295,6 +315,8 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
         self_consistent = False
 
         H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args)  # Builds the initial Fock matrix
+        K = kinetic_matrix(atomic_orbitals)(*args)
+        V = -1 * electron_nucleus_matrix(atomic_orbitals, charge)(atom_R, *args)
         S = overlap_matrix(atomic_orbitals)(*args)  # Builds the overlap matrix
         eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args)  # Builds the electron repulsion tensor
 
@@ -321,7 +343,7 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
         P = density_matrix(num_elec, coeffs)
 
         counter = 0
-        while not self_consistent:
+        for _ in range(50):
             JM = anp.einsum('pqrs,rs->pq', eri_tensor, P)
             KM = anp.einsum('psqr,rs->pq', eri_tensor, P)
             E_mat = 2 * JM - KM
@@ -333,11 +355,126 @@ def hartree_fock(num_elec, charge, atomic_orbitals, tol=1e-8):
             # Solve for eigenvalues and eigenvectors
             v_fock, w_fock = norm_eigh(F_tilde)
             w_fock = X @ w_fock
+
             P_new = density_matrix(num_elec, w_fock)
 
             self_consistent = (norm(P_new - P) <= tol)
             P = P_new
 
             counter += 1
-        return w_fock, F, H_core, eri_tensor
+        
+        if guess is not None:
+
+            # Enforces ordering convention
+            perms = list(itertools.permutations(list(range(len(w_fock)))))
+            scores = []
+            for p in perms:
+                scores.append(((anp.abs(w_fock)[:,p] - anp.abs(guess)) ** 2).sum())
+            w_fock = w_fock[:,perms[scores.index(min(scores))]]
+
+            # Enforces sign convention
+            w_new = []
+            for c, row in enumerate(w_fock.T):
+                score = ((row - guess.T[c]) ** 2).sum() < (((-1 * row) - guess.T[c]) ** 2).sum()
+                if score:
+                    w_new.append(row)
+                else:
+                    w_new.append(-1 * row)
+            w_fock = anp.array(w_new).T
+        
+        return w_fock, F, H_core, eri_tensor, K, V, S
     return HF
+
+"""
+def holomorphic_hartree_fock(num_elec, charge, atomic_orbitals, initial=None, tol=1e-8):
+
+    def HF(atom_R, *args):
+        self_consistent = False
+
+        H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args)  # Builds the initial Fock matrix
+        K = kinetic_matrix(atomic_orbitals)(*args)
+        V = -1 * electron_nucleus_matrix(atomic_orbitals, charge)(atom_R, *args)
+        S = overlap_matrix(atomic_orbitals)(*args)  # Builds the overlap matrix
+        eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args)  # Builds the electron repulsion tensor
+
+        F_initial = initial if initial is not None else H_core
+
+        # Fudge factor!
+        convergence = 1e-8
+        fudge = anp.array(np.linspace(0, 1, S.shape[0])) * convergence
+        shift = anp.diag(fudge)
+
+        S = S + shift
+
+        v, w = norm_eig(S)
+        v = anp.array([1 / anp.sqrt(r) for r in v])
+        diag_mat, w_inv = anp.diag(v), w.T
+        X = w @ diag_mat @ w_inv
+
+        # Constructs F_tilde and finds the initial coefficients
+        F_tilde_initial = X.T @ F_initial @ X
+        F_tilde_initial = F_tilde_initial + shift
+        v_fock, w_fock = norm_eig(F_tilde_initial)
+
+        coeffs = X @ w_fock
+        P = holomorphic_density_matrix(num_elec, coeffs)
+
+        counter = 0
+        while not self_consistent:
+            JM = anp.einsum('pqrs,rs->pq', eri_tensor, P)
+            KM = anp.einsum('psqr,rs->pq', eri_tensor, P)
+            E_mat = 2 * JM - KM
+
+            F = H_core + E_mat
+            F_tilde = anp.dot(X.T, anp.dot(F, X))
+            F_tilde = F_tilde + shift
+
+            # Solve for eigenvalues and eigenvectors
+            v_fock, w_fock = norm_eig(F_tilde)
+            w_fock = X @ w_fock
+            P_new = density_matrix(num_elec, w_fock)
+
+            self_consistent = (norm(P_new - P) <= tol)
+            P = P_new
+
+            counter += 1
+        return w_fock, F, H_core, eri_tensor, K, V, S
+    return HF
+"""
+
+
+def grad_hartree_fock(num_elec, charge, atomic_orbitals, guess=None, tol=1e-8):
+    """Performs the Hartree-Fock procedure with gradient descent
+
+    Note that this method does not necessarily build matrices using the methods
+    constructed above.
+    
+    anp.einsum('pq,qp', fock + h_core, density_matrix(num_elec, w_fock))
+    """
+
+    def HF_energy(atom_R, *args):
+        S = overlap_matrix(atomic_orbitals)(*args)  # Builds the overlap matrix
+        H_core = core_matrix(charge, atomic_orbitals)(atom_R, *args)  # Builds the initial Fock matrix
+            
+        eri_tensor = electron_repulsion_tensor(atomic_orbitals)(*args)  # Builds the electron repulsion tensor
+
+        # Fudge factor!
+        convergence = 1e-8
+        fudge = anp.array(np.linspace(0, 1, S.shape[0])) * convergence
+        shift = anp.diag(fudge)
+
+        S = S + shift
+
+        def fn(coeffs):
+            P = density_matrix(num_elec, coeffs)
+
+            JM = anp.einsum('pqrs,rs->pq', eri_tensor, P)
+            KM = anp.einsum('psqr,rs->pq', eri_tensor, P)
+            E_mat = 2 * JM - KM
+
+            F = H_core + E_mat
+            hf_energy = anp.einsum('pq,qp', F + H_core, P) # Computes HF energy
+            overlap_val = anp.einsum('pq,pr,qs', S, coeffs, coeffs) # Computes the overlap value
+            return hf_energy, overlap_val
+        return fn, S
+    return HF_energy

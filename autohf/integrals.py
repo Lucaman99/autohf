@@ -39,10 +39,15 @@ def atomic_norm(L, alpha, a):
 
     coeff = ((anp.pi ** (3/2)) / (2 ** L_sum))
     coeff = coeff * double_factorial(2 * l - 1) * double_factorial(2 * m - 1) * double_factorial(2 * n - 1)
-
     s = ((a[:,anp.newaxis] * a) / ((alpha[:,anp.newaxis] + alpha) ** (L_sum + (3/2)))).sum()
     return 1 / anp.sqrt(coeff * s)
 
+
+def general_function(a, b, c, N, t):
+    s = 0
+    for k in range(0, int(N - t + 1)):
+        s = s + binom(N - k, (t + N - k)/2) * (b ** k) * (c ** ((t + N - k)/2)) * (a ** ((t + N - k)/2))
+    return s
 
 def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
     Qx = Ra - Rb
@@ -87,6 +92,40 @@ def expansion_coeff(i, j, t, Ra, Rb, alpha, beta):
         coeffs = new_coeffs
         pairs = new_pairs
     return cs
+
+def double_factorial(n):
+    """
+    Computes the double factorial of n
+    """
+    return anp.prod(anp.array(anp.arange(n, 1, -2)))
+
+
+def factorial(n):
+    return anp.prod(anp.arange(1, n + 1))
+
+def binom(n, k):
+    return factorial(n) / (factorial(k) * factorial(n - k))
+
+
+def e_coeff(i, j, t, Ra, Rb, alpha, beta):
+    
+    Qx = Ra - Rb
+    p = alpha + beta
+    q = (alpha * beta) / p
+    alpha, PA, PB = (1 / (2 * p)), -(q * Qx / alpha), (q * Qx / beta)
+    K = anp.exp(-q * Qx ** 2)
+    I = i + j - t
+    
+    s = 0
+    for x in range(int(anp.floor(I / 2)) + 1):
+        lambda_x = (alpha ** x) * factorial(t + (2*x)) / (factorial(t) * double_factorial(2 * x))
+        s_inner = 0
+        for y in range(I - 2 * x + 1):
+            C_aj = binom(i, y) if y <= i else 0.0
+            C_bj = binom(j, I - 2*x - y) if (I - 2*x - y) <= j else 0.0
+            s_inner = s_inner + C_aj * C_bj * (PA ** y) * (PB ** (I - 2*x - y))
+        s = s + lambda_x * s_inner    
+    return (alpha ** t) * s * K
 
 
 def gaussian_overlap(alpha, L1, Ra, beta, L2, Rb):
@@ -162,6 +201,10 @@ def factorial(n):
     for k in range(n):
         prod *= n - k
     return prod
+
+
+def binom(n, k):
+    return factorial(n) / (factorial(k) * factorial(n - k))
 
 
 def rising_factorial(n, lim):
