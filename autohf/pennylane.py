@@ -26,7 +26,6 @@ from pennylane import qchem
 from .hamiltonian import *
 from .orbitals import *
 
-
 angs_bohr = 1.8897259885789
 
 def generate_basis_set(molecule):
@@ -278,6 +277,40 @@ def sparse_H(molecule, wires, guess=None):
         nuc_energy = core_ad + nuc_fn
         return qml.SparseHamiltonian(bv.sparse_H(one_elec, two_elec, const=nuc_energy), wires=wires)
     return H
+
+
+def sparse_H_mat(molecule, guess=None):
+    """Generates a sparse Hamiltonian"""
+    structure = molecule.symbols
+    num_elecs, charges = charge_structure(molecule)
+    basis = molecule.basis_name
+    hf_b, num = generate_basis_set(molecule)
+    core, active = qchem.active_space(num_elecs, num, active_electrons=molecule.active_electrons, active_orbitals=molecule.active_orbitals)  # Prepares active space
+
+    def H(R):
+        re_fn = lambda r: r.reshape((len(charges), 3))
+
+        def transform(r):
+            re = re_fn(r)
+            arguments = []
+            for i, b in enumerate(hf_b):
+                arguments.extend([[re[i]]] * len(b))
+            return re, *arguments
+
+        new_b_set = sum(hf_b, [])
+        integrals = electron_integrals_flat(num_elecs, charges, new_b_set, guess=guess, occupied=core, active=active)(
+            *transform(R))
+
+        n = len(active)
+        num = (n ** 2) + 1
+        core_ad, one_elec, two_elec = integrals[0], integrals[1:num].reshape((n, n)), integrals[num:].reshape(
+            (n, n, n, n))
+
+        nuc_fn = nuclear_energy(charges)(re_fn(R))
+        nuc_energy = core_ad + nuc_fn
+        return bv.sparse_H(one_elec, two_elec, const=nuc_energy)
+    return H
+
 
 def sparse_H_iter(molecule, wires):
     """Generates a sparse Hamiltonian"""
